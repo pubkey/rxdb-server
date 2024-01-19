@@ -1,0 +1,24 @@
+{
+  "// description": "this tsconfig is used when the types are generated",
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "moduleResolution": "node",
+    "module": "es2022",
+    "outDir": "../dist/types",
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "declarationMap": false,
+    "stripInternal": true,
+    "noEmit": false,
+    "rootDir": "../src",
+    "typeRoots": [
+      "../node_modules/@types"
+    ]
+  },
+  "include": [
+    "../src"
+  ],
+  "exclude": [
+    "../plugins"
+  ]
+}
