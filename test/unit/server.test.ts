@@ -1,35 +1,38 @@
 import assert from 'assert';
-import config, {
-} from './config.ts';
 
 import {
     addRxPlugin,
     clone,
     randomCouchString
-} from '../../plugins/core/index.mjs';
-import type {
-    RxServerChangeValidator,
-    startRxServer as startRxServerType
+} from 'rxdb/plugins/core';
+import {
+    type RxServerChangeValidator,
+    type RxServerAuthHandler,
+    type RxServerQueryModifier,
+    startRxServer
 } from '../../plugins/server/index.mjs';
 import {
     replicateServer
 } from '../../plugins/replication-server/index.mjs';
-import * as humansCollection from './../helper/humans-collection.ts';
-import { nextPort } from '../helper/port-manager.ts';
-import { ensureReplicationHasNoErrors } from '../helper/test-util.ts';
-import * as schemas from '../helper/schemas.ts';
+import {
+    schemaObjects,
+    schemas,
+    isDeno,
+    isNode,
+    nextPort,
+    humansCollection,
+    ensureReplicationHasNoErrors,
+    isFastMode,
+    HumanDocumentType
+} from 'rxdb/plugins/test-utils';
 import { wait, waitUntil } from 'async-test-util';
-import * as schemaObjects from '../helper/schema-objects.ts';
+import { RxDBMigrationPlugin } from 'rxdb/plugins/migration-schema';
 import EventSource from 'eventsource';
 import type { IncomingHttpHeaders } from 'node:http';
 
-import { RxDBMigrationPlugin } from '../../plugins/migration-schema/index.mjs';
 addRxPlugin(RxDBMigrationPlugin);
 
-import type {
-    RxServerAuthHandler,
-    RxServerQueryModifier
-} from '../../plugins/server/index.mjs';
+import config from './config.ts';
 
 const urlSubPaths = ['pull', 'push', 'pullStream'];
 
@@ -38,9 +41,10 @@ type AuthType = {
 };
 
 describe('server.test.ts', () => {
+    assert.ok(config);
     if (
-        !config.platform.isNode() ||
-        config.isDeno
+        !isNode ||
+        isDeno
     ) {
         return;
     }
@@ -65,14 +69,6 @@ describe('server.test.ts', () => {
         userid: 'alice'
     };
 
-
-    let startRxServer: typeof startRxServerType;
-    describe('init', () => {
-        it('load server plugin', async () => {
-            const serverPlugin = await import('../../plugins/server/index.mjs');
-            startRxServer = serverPlugin.startRxServer;
-        });
-    });
     describe('basics', () => {
         it('should start end stop the server', async () => {
             const port = await nextPort();
@@ -88,7 +84,7 @@ describe('server.test.ts', () => {
             await col.database.destroy();
         });
     });
-    config.parallel('replication endoint', () => {
+    describe('replication endoint', () => {
         describe('basics', () => {
             it('should be able to reach the endpoint', async function () {
                 const col = await humansCollection.create(1);
@@ -174,7 +170,7 @@ describe('server.test.ts', () => {
                 await replicationState.awaitInSync();
 
                 // create
-                const clientDoc = await clientCol.insert(schemaObjects.human(undefined, 1));
+                const clientDoc = await clientCol.insert(schemaObjects.humanData(undefined, 1));
                 await replicationState.awaitInSync();
                 await waitUntil(async () => {
                     const docs = await serverCol.find().exec();
@@ -276,7 +272,7 @@ describe('server.test.ts', () => {
                 console.log(':::::::::::::::::::::::::::::::: 1');
 
                 // server to client
-                await col.insert(schemaObjects.human());
+                await col.insert(schemaObjects.humanData());
                 await waitUntil(async () => {
                     const docs = await clientCol.find().exec();
                     return docs.length === 11;
@@ -284,7 +280,7 @@ describe('server.test.ts', () => {
 
                 console.log(':::::::::::::::::::::::::::::::: 2');
                 // client to server
-                await clientCol.insert(schemaObjects.human());
+                await clientCol.insert(schemaObjects.humanData());
                 await waitUntil(async () => {
                     const docs = await col.find().exec();
                     return docs.length === 12;
@@ -293,7 +289,7 @@ describe('server.test.ts', () => {
 
                 // do not miss updates when connection is dropped
                 server.httpServer.closeAllConnections();
-                await col.insert(schemaObjects.human());
+                await col.insert(schemaObjects.humanData());
                 await waitUntil(async () => {
                     const docs = await clientCol.find().exec();
                     return docs.length === 13;
@@ -354,7 +350,7 @@ describe('server.test.ts', () => {
                 await replicationState.awaitInSync();
                 console.log(':::::000000 3');
 
-                await col.insert(schemaObjects.human('after-correct-headers'));
+                await col.insert(schemaObjects.humanData('after-correct-headers'));
                 console.log(':::::000000 3.1');
                 await waitUntil(async () => {
                     const docs = await clientCol.find().exec();
@@ -365,7 +361,7 @@ describe('server.test.ts', () => {
 
                 await replicationState.awaitInSync();
                 console.log(':::::000000 5');
-                await col.insert(schemaObjects.human('after-correct-headers-ongoing'));
+                await col.insert(schemaObjects.humanData('after-correct-headers-ongoing'));
                 console.log(':::::000000 6');
                 await waitUntil(async () => {
                     const docs = await clientCol.find().exec();
@@ -378,13 +374,13 @@ describe('server.test.ts', () => {
         });
         return;
         describe('queryModifier', () => {
-            const queryModifier: RxServerQueryModifier<AuthType, schemas.HumanDocumentType> = (authData, query) => {
+            const queryModifier: RxServerQueryModifier<AuthType, HumanDocumentType> = (authData, query) => {
                 query.selector.firstName = { $eq: authData.data.userid };
                 return query;
             };
             it('should only return the matching documents to the client', async () => {
                 const serverCol = await humansCollection.create(5);
-                await serverCol.insert(schemaObjects.human('only-matching', 1, headers.userid));
+                await serverCol.insert(schemaObjects.humanData('only-matching', 1, headers.userid));
                 const port = await nextPort();
                 const server = await startRxServer({
                     database: serverCol.database,
@@ -418,10 +414,10 @@ describe('server.test.ts', () => {
 
                 // also ongoing events should only be replicated if matching
                 await serverCol.bulkInsert([
-                    schemaObjects.human('matching1', 1, headers.userid),
-                    schemaObjects.human('matching2', 1, headers.userid),
-                    schemaObjects.human(),
-                    schemaObjects.human()
+                    schemaObjects.humanData('matching1', 1, headers.userid),
+                    schemaObjects.humanData('matching2', 1, headers.userid),
+                    schemaObjects.humanData(),
+                    schemaObjects.humanData()
                 ]);
                 await replicationState.awaitInSync();
 
@@ -448,7 +444,7 @@ describe('server.test.ts', () => {
                     queryModifier
                 });
                 const clientCol = await humansCollection.create(0);
-                await clientCol.insert(schemaObjects.human('only-matching', 1, headers.userid));
+                await clientCol.insert(schemaObjects.humanData('only-matching', 1, headers.userid));
                 const url = 'http://localhost:' + port + '/' + endpoint.urlPath;
                 const replicationState = await replicateServer({
                     collection: clientCol,
@@ -472,7 +468,7 @@ describe('server.test.ts', () => {
                 });
 
                 // also ongoing events should only be replicated if matching
-                await clientCol.insert(schemaObjects.human('matching1', 1, headers.userid));
+                await clientCol.insert(schemaObjects.humanData('matching1', 1, headers.userid));
                 await replicationState.awaitInSync();
                 await waitUntil(async () => {
                     const docs = await serverCol.find().exec();
@@ -481,11 +477,11 @@ describe('server.test.ts', () => {
 
                 // when at least one document does not match, do no longer push anything
                 await clientCol.bulkInsert([
-                    schemaObjects.human(),
-                    schemaObjects.human(),
-                    schemaObjects.human('matching2', 2, headers.userid)
+                    schemaObjects.humanData(),
+                    schemaObjects.humanData(),
+                    schemaObjects.humanData('matching2', 2, headers.userid)
                 ]);
-                await wait(config.isFastMode() ? 100 : 200);
+                await wait(isFastMode() ? 100 : 200);
 
                 // should not have pushed anything
                 const serverDocs = await serverCol.find().exec();
@@ -498,7 +494,7 @@ describe('server.test.ts', () => {
             });
         });
         describe('changeValidator', () => {
-            const changeValidator: RxServerChangeValidator<AuthType, schemas.HumanDocumentType> = (authData, change) => {
+            const changeValidator: RxServerChangeValidator<AuthType, HumanDocumentType> = (authData, change) => {
                 if (change.assumedMasterState && change.assumedMasterState.firstName !== authData.data.userid) {
                     return false;
                 }
@@ -536,7 +532,7 @@ describe('server.test.ts', () => {
                 replicationState.forbidden$.subscribe(() => forbiddenEmitted = true);
 
                 // insert document
-                const clientDoc = await clientCol.insert(schemaObjects.human(undefined, 1, headers.userid));
+                const clientDoc = await clientCol.insert(schemaObjects.humanData(undefined, 1, headers.userid));
                 await waitUntil(async () => {
                     const docs = await serverCol.find().exec();
                     return docs.length === 1;
