@@ -25,7 +25,8 @@ import {
 import { wait, waitUntil } from 'async-test-util';
 import { RxDBMigrationPlugin } from 'rxdb/plugins/migration-schema';
 import EventSource from 'eventsource';
-
+import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
+addRxPlugin(RxDBLeaderElectionPlugin);
 addRxPlugin(RxDBMigrationPlugin);
 
 import config from './config.ts';

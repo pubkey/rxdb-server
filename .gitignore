@@ -1,6 +1,7 @@
 /node_modules
 /rxdb-premium.tgz
 /test-integration
+/test-integration/*
 /dist
 /plugins
 /release

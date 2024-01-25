@@ -5,7 +5,8 @@ test/
 docs/
 config/
 .github/
-/test-integration-*
+/test-integration
+/test-integration/*
 /release
 /release-npm
 /release-repo
