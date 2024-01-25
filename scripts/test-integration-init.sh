@@ -29,10 +29,10 @@ find test -type f -exec sed -i 's|\.\.\/\.\.\/plugins\/server|rxdb-server/plugin
 find test -type f -exec sed -i 's|\.\.\/\.\.\/plugins\/replication-server|rxdb-server/plugins/replication-server|g' {} +
 find test -type f -exec sed -i 's|\.\.\/\.\.\/plugins\/test-utils\/index\.mjs|rxdb/plugins/test-utils|g' {} +
 
+npm install
 npm install rxdb@$RXDB_VERSION
 npm install foundationdb@1.1.4
 npm install ./rxdb-server.tgz
-npm install
 
 (cd ./node_modules/rxdb-server/ && npm i)
 
