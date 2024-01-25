@@ -20,7 +20,6 @@
   "sideEffects": false,
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
-  "type": "module",
   "exports": {
     ".": {
       "types": "./dist/types/index.d.ts",
@@ -51,7 +50,11 @@
     "build:types": "rimraf -rf ./dist/types && tsc --project ./config/tsconfig.types.json",
     "build": "npm run prebuild && rimraf -rf ./dist && npm run build:plugins && concurrently \"npm run build:cjs\" \"npm run build:es\" \"npm run build:types\" --success all",
     "build:plugins": "node ./scripts/generate-plugins-package-json.mjs",
-    "test:server:node": "ts-mocha ./test/unit/server.test.ts --bail"
+    "// build:bundle": "bundles the npm module so it can be installed into other folder to run tests",
+    "build:bundle": "rimraf -rf rxdb-server.tgz && npx yarn@1.22.10 pack ./ --filename ./rxdb-server.tgz",
+    "test:unit": "ts-mocha ./test/unit.test.ts --bail",
+    "test:integration:init": "(cd ./scripts && bash test-integration-init.sh)",
+    "test:integration:memory": "(cd test-integration && npm run transpile && npm run test:node:memory)"
   },
   "peerDependencies": {
     "rxdb": "*",
@@ -112,7 +115,7 @@
     "minify-all-js": "0.1.9",
     "mocha": "10.2.0",
     "rimraf": "5.0.5",
-    "rxdb": "15.4.1",
+    "rxdb": "15.4.2",
     "rxjs": "7.8.1",
     "ts-loader": "9.5.1",
     "ts-mocha": "10.0.0",

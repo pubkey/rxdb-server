@@ -1,25 +1,14 @@
 /node_modules
 /rxdb-premium.tgz
-/test-integration-sqlite
-/test-integration-indexeddb
-/test-integration-sharding
-/test-integration-memory-synced
-/test-integration-worker
-/test-integration-encryption-web-crypto
-/test-integration-logger
-/test-react-native
-/test-integration-opfs
-/test-integration-filesystem-node
+/test-integration
 /dist
 /plugins
 /release
-/release-npm
-/release-repo
 stats.json
 test_tmp/
 *.~lock*
 test-db-*
-test-sqlite-performance-*
+rxdb-server.tgz
 
 ## copied from the rxdb core via 'npm run prebuild'
 scripts/generate-plugins-package-json.mjs

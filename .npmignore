@@ -14,5 +14,6 @@ config/
 renovate.json
 tsconfig.json
 tsconfig.lint.json
+rxdb-server.tgz
 
 test_tmp/

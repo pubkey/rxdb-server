@@ -2,15 +2,17 @@
   "// description": "this tsconfig is used when the types are generated",
   "extends": "../tsconfig.json",
   "compilerOptions": {
+    "target": "es2022",
+    "module": "esnext",
     "moduleResolution": "node",
-    "module": "es2022",
     "outDir": "../dist/types",
     "declaration": true,
     "emitDeclarationOnly": true,
     "declarationMap": false,
     "stripInternal": true,
+    "esModuleInterop": true,
     "noEmit": false,
-    "rootDir": "../src",
+    "rootDir": "../",
     "typeRoots": [
       "../node_modules/@types"
     ]
