@@ -54,7 +54,9 @@
     "build:bundle": "rimraf -rf rxdb-server.tgz && npx yarn@1.22.10 pack ./ --filename ./rxdb-server.tgz",
     "test:unit": "ts-mocha ./test/unit.test.ts --bail",
     "test:integration:init": "(cd ./scripts && bash test-integration-init.sh)",
-    "test:integration:memory": "(cd test-integration && npm run transpile && npm run test:node:memory)"
+    "test:integration:memory": "(cd test-integration && npm run transpile && npm run test:node:memory)",
+    "test:integration:foundationdb": "(cd test-integration && npm run transpile && npm run test:node:foundationdb)",
+    "test:integration:mongodb": "(cd test-integration && npm run transpile && npm run test:node:mongodb)"
   },
   "peerDependencies": {
     "rxdb": "*",

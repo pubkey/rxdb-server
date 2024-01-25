@@ -1,0 +1,97 @@
+# This is a basic workflow to help you get started with Actions
+
+name: CI
+
+# Controls when the action will run.
+on:
+  # Triggers the workflow on push or pull request events but only for the master branch
+  push:
+    branches: [master]
+  pull_request:
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# https://stackoverflow.com/a/72408109/3443137
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+# For a lower total time
+# the jobs which take longes must come before the faster ones
+# because github will start them likely earlier
+jobs:
+  core:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set node version
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+
+      - name: Reuse npm cache folder
+        uses: actions/cache@v4
+        env:
+          cache-name: cache-node-modules
+        with:
+          path: |
+            ~/.npm
+            ./node_modules
+          key: ${{ runner.os }}-npm-core-x3-${{ hashFiles('**/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-core-x3-
+
+      - name: install npm dependencies
+        run: npm install
+
+      - name: build
+        run: npm run build
+
+      - name: test:typings
+        run: npm run test:unit
+
+  integration:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set node version
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+
+      - name: Reuse npm cache folder
+        uses: actions/cache@v4
+        env:
+          cache-name: cache-node-modules
+        with:
+          path: |
+            ~/.npm
+            ./node_modules
+          key: ${{ runner.os }}-npm-storage-dexie-x3-${{ hashFiles('**/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-storage-dexie-x3-
+
+      - run: npm install
+      - run: npm run test:integration:init
+      - run: npm run test:integration:memory
+
+      # MongoDB
+      - name: Start MongoDB
+        uses: supercharge/mongodb-github-action@1.10.0
+        with:
+          mongodb-version: 7.0.1
+      - run: npm run test:integration:mongodb
+
+
+      # FoundationDB
+      - name: pre-pull foundationdb docker images
+        # ensure it has downloaded the image
+        run: |
+          docker pull foundationdb/foundationdb:7.3.23
+      - name: install FoundationDB client and server
+        working-directory: ./scripts
+        run: sh install-foundationdb.sh
+      - run: npm run test:integration:foundationdb

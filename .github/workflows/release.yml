@@ -1,0 +1,78 @@
+name: release
+on:
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v2.5.1
+        with:
+          node-version-file: '.nvmrc'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Reuse npm cache folder
+        uses: actions/cache@v2
+        env:
+          cache-name: cache-node-modules
+        with:
+          path: |
+            ~/.npm
+            ./node_modules
+          key: ${{ runner.os }}-npm-release-x2-${{ hashFiles('**/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-release-x2-
+
+      - name: Set git config
+        run: |
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+      - run: npm install
+      - run: npm run build
+
+      - name: Get version
+        id: version
+        run: |
+          npm run version
+          echo ::set-output name=version::$(node ./scripts/version.js)
+
+      - name: Set prerelease variable
+        id: vars
+        run: |
+          echo ::set-output name=prerelease::${{ contains(steps.version.outputs.version, 'beta') }}
+          echo ::set-output name=version::${{ steps.version.outputs.version }}
+
+      - name: Log parsed version
+        run: |
+          node -v
+          echo "version: ${{ steps.vars.outputs.version }}"
+          echo "prerelease: ${{ steps.vars.outputs.prerelease }}"
+
+      - name: add git tag
+        run: |
+          git add .
+          git commit -m ${{ steps.vars.outputs.version }}
+          git tag ${{ steps.vars.outputs.version }}
+
+      - run: npm publish --tag next
+        if: steps.vars.outputs.prerelease == 'true'
+        working-directory: release-npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - run: npm publish
+        if: steps.vars.outputs.prerelease == 'false'
+        working-directory: release-npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}
+
+
