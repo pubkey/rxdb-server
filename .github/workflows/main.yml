@@ -94,4 +94,5 @@ jobs:
       - name: install FoundationDB client and server
         working-directory: ./scripts
         run: sh install-foundationdb.sh
+      - run: npm install foundationdb@1.1.4
       - run: npm run test:integration:foundationdb

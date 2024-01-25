@@ -31,7 +31,6 @@ find test -type f -exec sed -i 's|\.\.\/\.\.\/plugins\/test-utils\/index\.mjs|rx
 
 npm install
 npm install rxdb@$RXDB_VERSION
-npm install foundationdb@1.1.4
 npm install ./rxdb-server.tgz
 
 (cd ./node_modules/rxdb-server/ && npm i)
