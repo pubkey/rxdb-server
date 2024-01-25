@@ -23,11 +23,7 @@ import {
     HumanDocumentType
 } from 'rxdb/plugins/test-utils';
 import { wait, waitUntil } from 'async-test-util';
-import { RxDBMigrationPlugin } from 'rxdb/plugins/migration-schema';
 import EventSource from 'eventsource';
-import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
-addRxPlugin(RxDBLeaderElectionPlugin);
-addRxPlugin(RxDBMigrationPlugin);
 
 import config from './config.ts';
 import { AuthType, authHandler, headers, urlSubPaths } from './test-helpers.ts';

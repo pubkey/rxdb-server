@@ -1,7 +1,8 @@
 import assert from 'assert';
 
 import {
-    addRxPlugin
+    addRxPlugin,
+    overwritable
 } from 'rxdb/plugins/core';
 import {
     startRxServer
@@ -11,14 +12,27 @@ import {
     humansCollection
 } from 'rxdb/plugins/test-utils';
 import { RxDBMigrationPlugin } from 'rxdb/plugins/migration-schema';
-
-addRxPlugin(RxDBMigrationPlugin);
+import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
+import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
 
 import config from './config.ts';
 import { authHandler } from './test-helpers.ts';
 
 describe('server.test.ts', () => {
-    assert.ok(config);
+    describe('init', () => {
+        it('init', async () => {
+            addRxPlugin(RxDBDevModePlugin);
+            addRxPlugin(RxDBMigrationPlugin);
+            addRxPlugin(RxDBLeaderElectionPlugin);
+
+            assert.ok(overwritable.isDevMode());
+            assert.ok(config);
+            if (config.storage.init) {
+                await config.storage.init();
+            }
+
+        });
+    });
     describe('basics', () => {
         it('should start end stop the server', async () => {
             const port = await nextPort();
