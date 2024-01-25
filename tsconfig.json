@@ -5,7 +5,6 @@
         // Search under node_modules for non-relative imports.
         // https://www.youtube.com/watch?v=H91aqUHn8sE
         "moduleResolution": "node",
-        "module": "es2022",
         // "module": "NodeNext",
         // Process & infer types from .js files.
         "allowJs": false,
