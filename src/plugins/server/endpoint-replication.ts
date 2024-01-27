@@ -30,7 +30,14 @@ import type {
     Response,
     NextFunction
 } from 'express';
-import expressCors from 'cors';
+import {
+    addAuthMiddleware,
+    blockPreviousVersionPaths,
+    closeConnection,
+    getDocAllowedMatcher,
+    setCors,
+    writeSSEHeaders
+} from './helper.ts';
 
 export type RxReplicationEndpointMessageType = {
     id: string;
@@ -39,7 +46,7 @@ export type RxReplicationEndpointMessageType = {
 };
 
 
-export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServerEndpoint {
+export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServerEndpoint<AuthType, RxDocType> {
     readonly type = 'replication';
     readonly urlPath: string;
     constructor(
@@ -49,64 +56,18 @@ export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServe
         public readonly changeValidator: RxServerChangeValidator<AuthType, RxDocType>,
         public readonly cors?: string
     ) {
-        let useCors = cors;
-        if (!useCors) {
-            useCors = this.server.cors;
-        }
-        if (useCors) {
-            this.server.expressApp.options('/' + [this.type, collection.name].join('/') + '/*', expressCors({
-                origin: useCors,
-                // some legacy browsers (IE11, various SmartTVs) choke on 204
-                optionsSuccessStatus: 200
-            }));
-        }
-
-
-        /**
-         * "block" the previous version urls and send a 426 on them so that
-         * the clients know they must update.
-         */
-        let v = 0;
-        while (v < collection.schema.version) {
-            const version = v;
-            ['pull', 'push', 'pullStream'].forEach(route => {
-                this.server.expressApp.all('/' + [this.type, collection.name, version].join('/') + '/' + route, (req, res) => {
-                    console.log('S: autdated version ' + version);
-                    closeConnection(res, 426, 'Outdated version ' + version + ' (newest is ' + collection.schema.version + ')');
-                });
-            });
-            v++;
-        }
+        setCors(this.server, [this.type, collection.name].join('/'), cors);
+        blockPreviousVersionPaths(this.server, [this.type, collection.name].join('/'), collection.schema.version);
 
         this.urlPath = [this.type, collection.name, collection.schema.version].join('/');
 
         console.log('SERVER URL PATH: ' + this.urlPath);
 
         const replicationHandler = getReplicationHandlerByCollection(this.server.database, collection.name);
-
-        const authDataByRequest = new WeakMap<Request, RxServerAuthData<AuthType>>();
-
-
-        async function auth(req: Request, res: Response, next: NextFunction) {
-            console.log('-- AUTH 1 ' + req.path);
-            try {
-                const authData = await server.authHandler(req.headers);
-                authDataByRequest.set(req, authData);
-                console.log('-- AUTH 2');
-                next();
-            } catch (err) {
-                console.log('-- AUTH ERR');
-                closeConnection(res, 401, 'Unauthorized');
-                return;
-            }
-            console.log('-- AUTH 3');
-
-        }
-        this.server.expressApp.all('/' + this.urlPath + '/*', auth, function (req, res, next) {
-            console.log('-- ALL 1');
-
-            next();
-        });
+        const authDataByRequest = addAuthMiddleware(
+            this.server,
+            this.urlPath
+        );
 
         this.server.expressApp.get('/' + this.urlPath + '/pull', async (req, res) => {
             console.log('-- PULL 1');
@@ -119,7 +80,7 @@ export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServe
                 limit,
                 { id, lwt }
             );
-            const useQueryChanges: FilledMangoQuery<RxDocType> = await this.queryModifier(
+            const useQueryChanges: FilledMangoQuery<RxDocType> = this.queryModifier(
                 ensureNotFalsy(authData),
                 plainQuery
             );
@@ -141,7 +102,7 @@ export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServe
         });
         this.server.expressApp.post('/' + this.urlPath + '/push', async (req, res) => {
             const authData = getFromMapOrThrow(authDataByRequest, req);
-            const docDataMatcherWrite = await getDocAllowedMatcher(this, ensureNotFalsy(authData));
+            const docDataMatcherWrite = getDocAllowedMatcher(this, ensureNotFalsy(authData));
             const rows: RxReplicationWriteToMasterRow<RxDocType>[] = req.body;
 
             console.log('/push body:');
@@ -188,26 +149,12 @@ export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServe
             res.json(conflicts);
         });
         this.server.expressApp.get('/' + this.urlPath + '/pullStream', async (req, res) => {
-
             console.log('##### new pullStream request');
 
-            res.writeHead(200, {
-                /**
-                 * Use exact these headers to make is less likely
-                 * for people to have problems.
-                 * @link https://www.youtube.com/watch?v=0PcMuYGJPzM
-                 */
-                'Content-Type': 'text/event-stream; charset=utf-8',
-                'Connection': 'keep-alive',
-                'Cache-Control': 'no-cache',
-                /**
-                 * Required for nginx
-                 * @link https://stackoverflow.com/q/61029079/3443137
-                 */
-                'X-Accel-Buffering': 'no'
-            });
-            res.flushHeaders();
+            writeSSEHeaders(res);
 
+            const authData = getFromMapOrThrow(authDataByRequest, req);
+            const docDataMatcherStream = getDocAllowedMatcher(this, ensureNotFalsy(authData));
             const subscription = replicationHandler.masterChangeStream$.pipe(
                 mergeMap(async (changes) => {
                     /**
@@ -229,7 +176,6 @@ export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServe
                     if (changes === 'RESYNC') {
                         return changes;
                     } else {
-                        const docDataMatcherStream = await getDocAllowedMatcher(this, ensureNotFalsy(authData));
                         const useDocs = changes.documents.filter(d => docDataMatcherStream(d as any));
                         return {
                             documents: useDocs,
@@ -251,35 +197,4 @@ export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServe
             });
         });
     }
-}
-
-
-async function closeConnection(response: Response, code: number, message: string) {
-    console.log('# CLOSE CONNECTION');
-    const responseWrite = {
-        code,
-        error: true,
-        message
-    };
-
-    console.log('close connection!');
-    response.statusCode = code;
-    response.set("Connection", "close");
-    await response.write(JSON.stringify(responseWrite));
-    response.end();
-}
-
-async function getDocAllowedMatcher<RxDocType, AuthType>(
-    endpoint: RxServerReplicationEndpoint<any, RxDocType>,
-    authData: RxServerAuthData<AuthType>
-) {
-    const useQuery: FilledMangoQuery<RxDocType> = await endpoint.queryModifier(
-        authData,
-        normalizeMangoQuery(
-            endpoint.collection.schema.jsonSchema,
-            {}
-        )
-    );
-    const docDataMatcher = getQueryMatcher(endpoint.collection.schema.jsonSchema, useQuery);
-    return docDataMatcher;
 }

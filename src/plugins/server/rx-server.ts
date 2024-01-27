@@ -2,7 +2,7 @@ import type {
     RxCollection,
     RxDatabase
 } from 'rxdb/plugins/core';
-import { RxServerReplicationEndpoint } from './rx-server-endpoint-replication.ts';
+import { RxServerReplicationEndpoint } from './endpoint-replication.ts';
 import type {
     RxServerAuthHandler,
     RxServerChangeValidator,

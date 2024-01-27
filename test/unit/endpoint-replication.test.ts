@@ -388,7 +388,6 @@ describe('endpoint-replication.test.ts', () => {
                     return docs.length === 3;
                 });
 
-
                 serverCol.database.destroy();
                 clientCol.database.destroy();
             });

@@ -7,6 +7,8 @@ import {
 } from 'http';
 
 export * from './types.ts';
+export * from './endpoint-replication.ts';
+export * from './endpoint-rest.ts';
 
 export async function startRxServer<AuthType>(options: RxServerOptions<AuthType>): Promise<RxServer<AuthType>> {
     options = flatClone(options);

@@ -2,7 +2,9 @@ import type {
     FilledMangoQuery,
     RxDatabase,
     RxReplicationWriteToMasterRow,
-    MaybePromise
+    MaybePromise,
+    RxCollection,
+    WithDeleted
 } from 'rxdb/plugins/core';
 import { IncomingHttpHeaders } from 'http';
 import { Express } from 'express';
@@ -54,11 +56,13 @@ export type RxServerAuthHandler<AuthType> =
  *     userId: { $eq: authData.userId }
  *   }
  * }
+ * 
+ * 
  */
 export type RxServerQueryModifier<AuthType, RxDocType> = (
     authData: RxServerAuthData<AuthType>,
     query: FilledMangoQuery<RxDocType>
-) => MaybePromise<FilledMangoQuery<RxDocType>>;
+) => FilledMangoQuery<RxDocType>;
 
 /**
  * Validates if a given change is allowed to be performed on the server.
@@ -69,10 +73,13 @@ export type RxServerQueryModifier<AuthType, RxDocType> = (
 export type RxServerChangeValidator<AuthType, RxDocType> = (
     authData: RxServerAuthData<AuthType>,
     change: RxReplicationWriteToMasterRow<RxDocType>
-) => MaybePromise<boolean>;
+) => boolean;
 
 
-export interface RxServerEndpoint {
-    type: 'replication';
+export interface RxServerEndpoint<AuthType, RxDocType> {
+    collection: RxCollection<RxDocType>;
+    type: 'replication' | 'rest' | string;
     urlPath: string;
+    queryModifier?: RxServerQueryModifier<AuthType, RxDocType>;
+    changeValidator?: RxServerChangeValidator<AuthType, RxDocType>;
 };
