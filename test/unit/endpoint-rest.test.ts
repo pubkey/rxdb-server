@@ -11,8 +11,8 @@ import {
     startRxServer
 } from '../../plugins/server';
 import {
-    replicateServer
-} from '../../plugins/replication-server';
+    createRestClient
+} from '../../plugins/client-rest';
 import {
     schemaObjects,
     schemas,
@@ -26,7 +26,13 @@ import { wait, waitUntil } from 'async-test-util';
 import EventSource from 'eventsource';
 
 import config from './config.ts';
-import { AuthType, authHandler, headers, postRequest, queryModifier, urlSubPaths } from './test-helpers.ts';
+import {
+    AuthType,
+    authHandler,
+    headers,
+    queryModifier,
+    urlSubPaths
+} from './test-helpers.ts';
 
 
 describe('endpoint-rest.test.ts', () => {
@@ -58,12 +64,14 @@ describe('endpoint-rest.test.ts', () => {
             const endpoint = await server.addRestEndpoint({
                 collection: col
             });
-            const url = 'http://localhost:' + port + '/' + endpoint.urlPath + '/query';
 
-            const response = await postRequest(url, { selector: {} });
+            const client = createRestClient('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+
+            const response = await client.query({ selector: {} });
             assert.strictEqual(response.documents.length, 5);
 
-            const responseSub = await postRequest(url, {
+            const responseSub = await client.query({
                 selector: {
                     passportId: { $eq: response.documents[0].passportId }
                 }
@@ -85,8 +93,8 @@ describe('endpoint-rest.test.ts', () => {
                 collection: col,
                 queryModifier
             });
-            const url = 'http://localhost:' + port + '/' + endpoint.urlPath + '/query';
-            const response = await postRequest(url, { selector: {} });
+            const client = createRestClient('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+            const response = await client.query({ selector: {} });
             assert.strictEqual(response.documents.length, 1);
             assert.strictEqual(response.documents[0].passportId, 'only-matching');
 
@@ -107,12 +115,12 @@ describe('endpoint-rest.test.ts', () => {
             const endpoint = await server.addRestEndpoint({
                 collection: col
             });
-            const url = 'http://localhost:' + port + '/' + endpoint.urlPath + '/get';
+            const client = createRestClient('http://localhost:' + port + '/' + endpoint.urlPath, headers);
 
-            const response = await postRequest(url, ids);
+            const response = await client.get(ids);
             assert.strictEqual(response.documents.length, 5);
 
-            const responseSub = await postRequest(url, [ids[0]]);
+            const responseSub = await client.get([ids[0]]);
             assert.strictEqual(responseSub.documents.length, 1);
 
             await col.database.destroy();
@@ -133,8 +141,8 @@ describe('endpoint-rest.test.ts', () => {
                 collection: col,
                 queryModifier
             });
-            const url = 'http://localhost:' + port + '/' + endpoint.urlPath + '/get';
-            const response = await postRequest(url, ids);
+            const client = createRestClient('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+            const response = await client.get(ids);
             assert.strictEqual(response.documents.length, 1);
             assert.strictEqual(response.documents[0].passportId, 'only-matching');
 
@@ -154,19 +162,18 @@ describe('endpoint-rest.test.ts', () => {
             const endpoint = await server.addRestEndpoint({
                 collection: col
             });
-            const url = 'http://localhost:' + port + '/' + endpoint.urlPath + '/set';
+            const client = createRestClient('http://localhost:' + port + '/' + endpoint.urlPath, headers);
 
             const setDoc = docs[0].toMutableJSON();
             setDoc.age = 100;
 
-            const response = await postRequest(url, [setDoc]);
-
+            const response = await client.set([setDoc]);
             const docAfter = await col.findOne(setDoc.passportId).exec(true);
             assert.strictEqual(docAfter.age, 100);
 
             await col.database.destroy();
         });
-        it('should not accept if changeValidator says no', async() => {
+        it('should not accept if changeValidator says no', async () => {
             const col = await humansCollection.create(5);
             const docs = await col.find().exec();
             const port = await nextPort();
@@ -179,15 +186,18 @@ describe('endpoint-rest.test.ts', () => {
                 collection: col,
                 changeValidator: () => false
             });
-            const url = 'http://localhost:' + port + '/' + endpoint.urlPath + '/set';
+            const client = createRestClient('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            const ageBefore = docs[0].age;
 
             const setDoc = docs[0].toMutableJSON();
             setDoc.age = 100;
 
-            const response = await postRequest(url, [setDoc]);
+            const response = await client.set([setDoc]);
 
+            // must still be the same because write must not be accepted
             const docAfter = await col.findOne(setDoc.passportId).exec(true);
-            assert.strictEqual(docAfter.age, 100);
+            assert.strictEqual(docAfter.age, ageBefore);
 
             await col.database.destroy();
 

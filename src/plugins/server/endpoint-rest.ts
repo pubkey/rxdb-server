@@ -82,13 +82,18 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
             });
         });
 
-        this.server.expressApp.post('/' + this.urlPath + '/query/observe', async (req, res) => {
+        /**
+         * It is not possible to send data with server send events,
+         * so we send the query as query parameter in base64
+         * like ?query=e3NlbGVjdG9yOiB7fX0=
+         */
+        this.server.expressApp.get('/' + this.urlPath + '/query/observe', async (req, res) => {
             let authData = getFromMapOrThrow(authDataByRequest, req);
             writeSSEHeaders(res);
 
             const useQuery: FilledMangoQuery<RxDocType> = this.queryModifier(
                 ensureNotFalsy(authData),
-                req.body
+                JSON.parse(atob(req.query.query as string))
             );
             const rxQuery = this.collection.find(useQuery as any);
             const subscription = rxQuery.$.pipe(

@@ -39,6 +39,12 @@
       "import": "./dist/esm/plugins/replication-server/index.js",
       "default": "./dist/esm/plugins/replication-server/index.js"
     },
+    "./plugins/client-rest": {
+      "types": "./dist/types/plugins/client-rest/index.d.ts",
+      "require": "./dist/cjs/plugins/client-rest/index.js",
+      "import": "./dist/esm/plugins/client-rest/index.js",
+      "default": "./dist/esm/plugins/client-rest/index.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {
