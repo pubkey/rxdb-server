@@ -69,6 +69,11 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
                 ensureNotFalsy(authData),
                 req.body
             );
+
+            console.log('S: query:');
+            console.log(JSON.stringify(req.body));
+            console.dir(useQuery);
+
             const rxQuery = this.collection.find(useQuery as any);
             const result = await rxQuery.exec();
             res.setHeader('Content-Type', 'application/json');

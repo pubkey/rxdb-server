@@ -1,8 +1,11 @@
 
+import { ById } from 'rxdb/plugins/core';
 import {
     type RxServerAuthHandler
 } from '../../plugins/server/index.mjs';
 import type { IncomingHttpHeaders } from 'node:http';
+import { RxServerQueryModifier } from '../../src/plugins/server';
+import { HumanDocumentType } from 'rxdb/plugins/test-utils';
 
 
 export const urlSubPaths = ['pull', 'push', 'pullStream'] as const;
@@ -29,4 +32,27 @@ export const authHandler: RxServerAuthHandler<AuthType> = (requestHeaders: Incom
 export const headers = {
     Authorization: 'is-valid',
     userid: 'alice'
+};
+
+
+export async function postRequest(
+    url: string,
+    body: any,
+    useHeaders: ById<string> = headers,
+) {
+    const request = await fetch(url, {
+        method: 'POST',
+        headers: Object.assign({
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        }, useHeaders),
+        body: JSON.stringify(body)
+    });
+    const response = await request.json();
+    return response;
+}
+
+export const queryModifier: RxServerQueryModifier<AuthType, HumanDocumentType> = (authData, query) => {
+    query.selector.firstName = { $eq: authData.data.userid };
+    return query;
 };

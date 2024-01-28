@@ -13,9 +13,10 @@ import {
     Server as HttpServer
 } from 'http';
 import { Express } from 'express';
+import { RxServerRestEndpoint } from './endpoint-rest.ts';
 
 export class RxServer<AuthType> {
-    public readonly endpoints: RxServerEndpoint[] = [];
+    public readonly endpoints: RxServerEndpoint<AuthType, any>[] = [];
 
     constructor(
         public readonly database: RxDatabase,
@@ -39,6 +40,27 @@ export class RxServer<AuthType> {
         cors?: '*' | string
     }) {
         const endpoint = new RxServerReplicationEndpoint(
+            this,
+            opts.collection,
+            opts.queryModifier ? opts.queryModifier : (_a, q) => q,
+            opts.changeValidator ? opts.changeValidator : () => true
+        );
+        this.endpoints.push(endpoint);
+        return endpoint;
+    }
+
+    public async addRestEndpoint<RxDocType>(opts: {
+        collection: RxCollection<RxDocType>,
+        queryModifier?: RxServerQueryModifier<AuthType, RxDocType>,
+        changeValidator?: RxServerChangeValidator<AuthType, RxDocType>,
+        /**
+         * Set a origin for allowed CORS requests.
+         * Overwrites the cors option of the server.
+         * [default='*']
+         */
+        cors?: '*' | string
+    }) {
+        const endpoint = new RxServerRestEndpoint(
             this,
             opts.collection,
             opts.queryModifier ? opts.queryModifier : (_a, q) => q,
