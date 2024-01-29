@@ -21,7 +21,8 @@ import {
     humansCollection,
     ensureReplicationHasNoErrors,
     isFastMode,
-    HumanDocumentType
+    HumanDocumentType,
+    humanDefault
 } from 'rxdb/plugins/test-utils';
 import { wait, waitUntil } from 'async-test-util';
 import EventSource from 'eventsource';
@@ -78,7 +79,6 @@ describe('endpoint-replication.test.ts', () => {
                 eventSource: EventSource
             });
             ensureReplicationHasNoErrors(replicationState);
-
             await replicationState.awaitInSync();
 
             const docsB = await clientCol.find().exec();
@@ -116,6 +116,8 @@ describe('endpoint-replication.test.ts', () => {
             ensureReplicationHasNoErrors(replicationState);
             await replicationState.awaitInSync();
 
+            console.log('------------------------- 1');
+
             // create
             const clientDoc = await clientCol.insert(schemaObjects.humanData(undefined, 1));
             await replicationState.awaitInSync();
@@ -124,6 +126,8 @@ describe('endpoint-replication.test.ts', () => {
                 return docs.length === 1;
             });
 
+            console.log('------------------------- 2');
+
             // update
             await clientDoc.incrementalPatch({ age: 2 });
             await replicationState.awaitInSync();
@@ -131,7 +135,9 @@ describe('endpoint-replication.test.ts', () => {
                 const serverDoc = await serverCol.findOne().exec(true);
                 console.dir(serverDoc.toJSON());
                 return serverDoc.age === 2;
-            });
+            }, 1000);
+
+            console.log('------------------------- 3');
 
             // delete
             await clientDoc.getLatest().remove();
@@ -140,6 +146,8 @@ describe('endpoint-replication.test.ts', () => {
                 const docs = await serverCol.find().exec();
                 return docs.length === 0;
             });
+
+            console.log('------------------------- 4');
 
             serverCol.database.destroy();
             clientCol.database.destroy();
@@ -458,10 +466,12 @@ describe('endpoint-replication.test.ts', () => {
                 pull: {},
                 eventSource: EventSource
             });
+            console.log('------------------------ 1');
             await replicationState.awaitInSync();
             let forbiddenEmitted = false;
             replicationState.forbidden$.subscribe(() => forbiddenEmitted = true);
 
+            console.log('------------------------ 2');
             // insert document
             const clientDoc = await clientCol.insert(schemaObjects.humanData(undefined, 1, headers.userid));
             await waitUntil(async () => {
@@ -469,6 +479,7 @@ describe('endpoint-replication.test.ts', () => {
                 return docs.length === 1;
             });
 
+            console.log('------------------------ 3');
             // update document
             await clientDoc.incrementalPatch({ age: 2 });
             await replicationState.awaitInSync();
@@ -477,11 +488,13 @@ describe('endpoint-replication.test.ts', () => {
                 return serverDoc.age === 2;
             });
 
+            console.log('------------------------ 4');
             // make disallowed change
             await clientDoc.getLatest().incrementalPatch({ firstName: 'foobar' });
             await waitUntil(() => forbiddenEmitted === true);
             const serverDocAfter = await serverCol.findOne().exec(true);
             assert.strictEqual(serverDocAfter.firstName, headers.userid);
+            console.log('------------------------ 5');
 
             serverCol.database.destroy();
             clientCol.database.destroy();
@@ -552,6 +565,46 @@ describe('endpoint-replication.test.ts', () => {
                     assert.strictEqual(typeof doc._meta, 'undefined');
                 });
             });
+
+            await col.database.destroy();
+        });
+        it('should keep serverOnlyFields on writes', async () => {
+            const col = await humansCollection.create(1);
+            const port = await nextPort();
+            const server = await startRxServer({
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addReplicationEndpoint({
+                collection: col,
+                serverOnlyFields: ['lastName']
+            });
+            const clientCol = await humansCollection.createBySchema(humanDefault);
+            const url = 'http://localhost:' + port + '/' + endpoint.urlPath;
+            const replicationState = await replicateServer({
+                collection: clientCol,
+                replicationIdentifier: randomCouchString(10),
+                url,
+                headers,
+                live: true,
+                push: {},
+                pull: {},
+                eventSource: EventSource
+            });
+            ensureReplicationHasNoErrors(replicationState);
+            let serverDoc = await col.findOne().exec(true);
+            const lastNameBefore = serverDoc.lastName;
+            await replicationState.awaitInSync();
+
+            console.log('------------------------------------------');
+            const clientDoc = await clientCol.findOne().exec(true);
+            await clientDoc.patch({ firstName: 'foobar' });
+            await replicationState.awaitInSync();
+
+            serverDoc = await col.findOne().exec(true);
+            assert.strictEqual(serverDoc.firstName, 'foobar');
+            assert.strictEqual(serverDoc.lastName, lastNameBefore);
 
             await col.database.destroy();
         });

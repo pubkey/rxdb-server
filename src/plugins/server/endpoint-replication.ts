@@ -6,7 +6,8 @@ import {
     RxStorageDefaultCheckpoint,
     StringKeys,
     prepareQuery,
-    getChangedDocumentsSinceQuery
+    getChangedDocumentsSinceQuery,
+    RxDocumentData
 } from 'rxdb/plugins/core';
 import { getReplicationHandlerByCollection } from 'rxdb/plugins/replication-websocket';
 import type { RxServer } from './rx-server.ts';
@@ -30,6 +31,8 @@ import {
     docContainsServerOnlyFields,
     doesContainRegexQuerySelector,
     getDocAllowedMatcher,
+    mergeServerDocumentFieldsMonad,
+    removeServerOnlyFieldsMonad,
     setCors,
     writeSSEHeaders
 } from './helper.ts';
@@ -58,6 +61,7 @@ export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServe
 
         this.urlPath = [this.type, collection.name, collection.schema.version].join('/');
 
+        const primaryPath = this.collection.schema.primaryPath;
         const replicationHandler = getReplicationHandlerByCollection(this.server.database, collection.name);
         const authDataByRequest = addAuthMiddleware(
             this.server,
@@ -75,15 +79,13 @@ export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServe
                 (change.assumedMasterState && docContainsServerOnlyFields(serverOnlyFields, change.assumedMasterState)) ||
                 docContainsServerOnlyFields(serverOnlyFields, change.newDocumentState)
             ) {
+                console.log('NOT VALID BECAISE SERVER ONLY FIELDS');
                 return false;
             }
             return changeValidator(authData, change);
         }
-        const serverOnlyFieldsStencil: any = {
-            _meta: undefined,
-            _rev: undefined,
-        };
-        this.serverOnlyFields.forEach(field => serverOnlyFieldsStencil[field] = undefined);
+        const removeServerOnlyFields = removeServerOnlyFieldsMonad<RxDocType>(this.serverOnlyFields);
+        const mergeServerDocumentFields = mergeServerDocumentFieldsMonad<RxDocType>(this.serverOnlyFields);
 
         this.server.expressApp.get('/' + this.urlPath + '/pull', async (req, res) => {
             const authData = getFromMapOrThrow(authDataByRequest, req);
@@ -106,10 +108,10 @@ export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServe
             const result = await this.collection.storageInstance.query(prepared);
 
             const newCheckpoint = result.documents.length === 0 ? { id, lwt } : {
-                id: ensureNotFalsy(lastOfArray(result.documents))[this.collection.schema.primaryPath],
+                id: ensureNotFalsy(lastOfArray(result.documents))[primaryPath],
                 updatedAt: ensureNotFalsy(lastOfArray(result.documents))._meta.lwt
             };
-            const responseDocuments = result.documents.map(d => Object.assign({}, d, serverOnlyFieldsStencil));
+            const responseDocuments = result.documents.map(d => removeServerOnlyFields(d));
             res.setHeader('Content-Type', 'application/json');
             res.json({
                 documents: responseDocuments,
@@ -120,6 +122,8 @@ export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServe
             const authData = getFromMapOrThrow(authDataByRequest, req);
             const docDataMatcherWrite = getDocAllowedMatcher(this, ensureNotFalsy(authData));
             const rows: RxReplicationWriteToMasterRow<RxDocType>[] = req.body;
+            const ids: string[] = [];
+            rows.forEach(row => ids.push((row.newDocumentState as any)[primaryPath]));
 
             for (const row of rows) {
                 // TODO remove this check
@@ -142,20 +146,34 @@ export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServe
                 return;
             }
             let hasInvalidChange = false;
-            await Promise.all(
-                rows.map(async (row) => {
-                    const isChangeValid = await this.changeValidator(ensureNotFalsy(authData), row);
-                    if (!isChangeValid) {
-                        hasInvalidChange = true;
-                    }
-                })
-            );
+
+            const currentStateDocsArray = await this.collection.storageInstance.findDocumentsById(ids, true);
+            const currentStateDocs = new Map<string, RxDocumentData<RxDocType>>();
+            currentStateDocsArray.forEach(d => currentStateDocs.set((d as any)[primaryPath], d));
+
+            const useRows: typeof rows = rows.map((row) => {
+                const id = (row.newDocumentState as any)[primaryPath];
+                const isChangeValid = this.changeValidator(ensureNotFalsy(authData), {
+                    newDocumentState: removeServerOnlyFields(row.newDocumentState),
+                    assumedMasterState: removeServerOnlyFields(row.assumedMasterState)
+                });
+                if (!isChangeValid) {
+                    hasInvalidChange = true;
+                }
+
+                const serverDoc = currentStateDocs.get(id);
+                return {
+                    newDocumentState: mergeServerDocumentFields(row.newDocumentState, serverDoc),
+                    assumedMasterState: mergeServerDocumentFields(row.assumedMasterState as any, serverDoc)
+                } as typeof row;
+            });
             if (hasInvalidChange) {
                 closeConnection(res, 403, 'Forbidden');
                 return;
             }
 
-            const conflicts = await replicationHandler.masterWrite(rows);
+            const conflicts = await replicationHandler.masterWrite(useRows);
+
             res.setHeader('Content-Type', 'application/json');
             res.json(conflicts);
         });
@@ -194,7 +212,7 @@ export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServe
                 if (filteredAndModified === 'RESYNC') {
                     res.write('data: ' + JSON.stringify(filteredAndModified) + '\n\n');
                 } else {
-                    const responseDocuments = ensureNotFalsy(filteredAndModified).documents.map(d => Object.assign({}, d, serverOnlyFieldsStencil));
+                    const responseDocuments = ensureNotFalsy(filteredAndModified).documents.map(d => removeServerOnlyFields(d as any));
                     res.write('data: ' + JSON.stringify({ documents: responseDocuments, checkpoint: ensureNotFalsy(filteredAndModified).checkpoint }) + '\n\n');
                 }
 

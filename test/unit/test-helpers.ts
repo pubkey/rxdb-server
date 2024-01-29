@@ -14,17 +14,13 @@ export type AuthType = {
 };
 
 export const authHandler: RxServerAuthHandler<AuthType> = (requestHeaders: IncomingHttpHeaders) => {
-    console.log('auth:');
-    console.dir(requestHeaders);
     if (requestHeaders.authorization === 'is-valid') {
-        console.log('auth valid!');
         return {
             validUntil: Date.now() + 100000, data: {
                 userid: requestHeaders.userid as string
             }
         };
     } else {
-        console.log('auth NOT valid!');
         throw new Error('auth not valid');
     }
 };

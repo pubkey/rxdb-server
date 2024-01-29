@@ -9,10 +9,12 @@ import { RxServerAuthData, RxServerEndpoint } from './types';
 import {
     FilledMangoQuery,
     MangoQuerySelector,
+    RxDocumentData,
     RxReplicationWriteToMasterRow,
     flatClone,
     getQueryMatcher,
-    normalizeMangoQuery
+    normalizeMangoQuery,
+    uniqueArray
 } from 'rxdb/plugins/core';
 
 export function setCors(
@@ -77,23 +79,16 @@ export function addAuthMiddleware<AuthType>(
 ): WeakMap<Request, RxServerAuthData<AuthType>> {
     const authDataByRequest = new WeakMap<Request, RxServerAuthData<AuthType>>();
     async function auth(req: Request, res: Response, next: NextFunction) {
-        console.log('-- AUTH 1 ' + req.path);
         try {
             const authData = await server.authHandler(req.headers);
             authDataByRequest.set(req, authData);
-            console.log('-- AUTH 2');
             next();
         } catch (err) {
-            console.log('-- AUTH ERR');
             closeConnection(res, 401, 'Unauthorized');
             return;
         }
-        console.log('-- AUTH 3');
-
     }
     server.expressApp.all('/' + path + '/*', auth, function (req, res, next) {
-        console.log('-- ALL 1');
-
         next();
     });
     return authDataByRequest;
@@ -149,6 +144,45 @@ export function docContainsServerOnlyFields(
     return has;
 }
 
+export function removeServerOnlyFieldsMonad<RxDocType>(serverOnlyFields: string[]) {
+    const serverOnlyFieldsStencil: any = {
+        _meta: undefined,
+        _rev: undefined,
+        _attachments: undefined
+    };
+    serverOnlyFields.forEach(field => serverOnlyFieldsStencil[field] = undefined);
+    return (
+        docData?: RxDocType | RxDocumentData<RxDocType>
+    ) => {
+        if (!docData) {
+            return docData;
+        }
+        return Object.assign({}, docData, serverOnlyFieldsStencil);
+    }
+}
+
+export function mergeServerDocumentFieldsMonad<RxDocType>(serverOnlyFields: string[]) {
+    let useFields = serverOnlyFields.slice(0);
+    // useFields.push('_rev');
+    // useFields.push('_meta');
+    // useFields.push('_attachments');
+    useFields = uniqueArray(useFields);
+
+    return (
+        clientDoc: RxDocType | RxDocumentData<RxDocType>,
+        serverDoc?: RxDocType | RxDocumentData<RxDocType>
+    ) => {
+        if (!serverDoc) {
+            return clientDoc;
+        }
+        const ret = flatClone(clientDoc);
+        useFields.forEach(field => {
+            (ret as any)[field] = (serverDoc as any)[field];
+        });
+        return ret;
+    }
+}
+
 
 /**
  * $regex queries are dangerous because they can dos-attach the 
@@ -168,8 +202,6 @@ export function doesContainRegexQuerySelector(selector: MangoQuerySelector<any> 
         return false;
     }
 
-
-    console.dir(selector);
     const entries = Object.entries(selector);
     for (const [key, value] of entries) {
         if (key === '$regex') {

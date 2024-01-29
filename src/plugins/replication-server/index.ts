@@ -90,7 +90,6 @@ export function replicateServer<RxDocType>(
                 const lwt = checkpointOrNull && checkpointOrNull.lwt ? checkpointOrNull.lwt : 0;
                 const id = checkpointOrNull && checkpointOrNull.id ? checkpointOrNull.id : '';
                 const url = options.url + `/pull?lwt=${lwt}&id=${id}&limit=${batchSize}`;
-                console.log('pull url ' + url);
                 const response = await fetch(url, {
                     method: 'GET',
                     headers: Object.assign({
@@ -162,8 +161,6 @@ export function replicateServer<RxDocType>(
                 });
                 // TODO check for 426 errors and handle them
                 eventSource.onerror = (err) => {
-                    console.log('EVS: eventsource error:');
-                    console.dir(err);
                     if (err.status === 401) {
                         replicationState.unauthorized$.next();
                         eventSource.close();
@@ -173,8 +170,6 @@ export function replicateServer<RxDocType>(
                     }
                 };
                 eventSource.onopen = (x) => {
-                    console.log('EVS: eventsource open!');
-                    console.dir(x);
                     pullStream$.next('RESYNC');
                 }
                 eventSource.onmessage = event => {

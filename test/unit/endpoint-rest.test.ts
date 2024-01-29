@@ -469,5 +469,31 @@ describe('endpoint-rest.test.ts', () => {
             });
             await col.database.destroy();
         });
+        it('should keep the serverOnlyFields value on writes', async () => {
+            const col = await humansCollection.create(1);
+            const doc = await col.findOne().exec(true);
+            const port = await nextPort();
+            const server = await startRxServer({
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                collection: col,
+                serverOnlyFields: ['lastName']
+            });
+
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+            const lastNameBefore = doc.lastName;
+
+            let docFromServer = ensureNotFalsy(await client.get([doc.primary])).documents[0];
+            docFromServer.firstName = 'foobar';
+
+            await client.set([docFromServer]);
+            const docAfter = await col.findOne().exec(true);
+            assert.strictEqual(lastNameBefore, docAfter.lastName);
+            assert.strictEqual(docAfter.firstName, 'foobar');
+            await col.database.destroy();
+        });
     });
 });

@@ -23,6 +23,7 @@ import {
     docContainsServerOnlyFields,
     doesContainRegexQuerySelector,
     getDocAllowedMatcher,
+    removeServerOnlyFieldsMonad,
     setCors,
     writeSSEHeaders
 } from './helper.ts';
@@ -87,11 +88,7 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
             }
             return changeValidator(authData, change);
         }
-        const serverOnlyFieldsStencil: any = {
-            _meta: undefined,
-            _rev: undefined,
-        };
-        this.serverOnlyFields.forEach(field => serverOnlyFieldsStencil[field] = undefined);
+        const removeServerOnlyFields = removeServerOnlyFieldsMonad(this.serverOnlyFields);
 
         this.server.expressApp.post('/' + this.urlPath + '/query', async (req, res) => {
             const authData = getFromMapOrThrow(authDataByRequest, req);
@@ -105,7 +102,6 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
                     )
                 );
             } catch (err) {
-                console.dir((err as any).message);
                 closeConnection(res, 400, 'Bad Request');
                 return;
             }
@@ -113,7 +109,7 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
             const result = await rxQuery.exec();
             res.setHeader('Content-Type', 'application/json');
             res.json({
-                documents: result.map(d => Object.assign({}, d.toJSON(), serverOnlyFieldsStencil))
+                documents: result.map(d => removeServerOnlyFields(d.toJSON()))
             });
         });
 
@@ -137,7 +133,7 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
             const rxQuery = this.collection.find(useQuery as any);
             const subscription = rxQuery.$.pipe(
                 mergeMap(async (result) => {
-                    const resultData = result.map(doc => Object.assign({}, doc.toJSON(), serverOnlyFieldsStencil));
+                    const resultData = result.map(doc => removeServerOnlyFields(doc.toJSON()));
 
                     /**
                      * The auth-data might be expired
@@ -178,7 +174,7 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
             const docMatcher = getDocAllowedMatcher(this, ensureNotFalsy(authData));
             let useDocs = resultValues.map(d => d.toJSON());
             useDocs = useDocs.filter(d => docMatcher(d as any));
-            useDocs = useDocs.map(d => Object.assign({}, d, serverOnlyFieldsStencil))
+            useDocs = useDocs.map(d => removeServerOnlyFields(d))
 
             res.setHeader('Content-Type', 'application/json');
             res.json({
@@ -215,20 +211,35 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
                 const docs = await collection.findByIds(docsData.map(d => (d as any)[primaryPath])).exec();
                 let useDocsData = docsData.slice();
                 docsData = [];
+
+                console.log('S docs:');
+                console.dir(Array.from(docs.values()).map(d => d.toJSON()));
+
                 for (const docData of useDocsData) {
                     const id = (docData as any)[primaryPath];
                     const doc = docs.get(id);
                     if (!doc) {
                         promises.push(this.collection.insert(docData).catch(err => onWriteError(err, docData)));
                     } else {
+
+                        console.log('S: UPDATE');
+
                         const isAllowed = this.changeValidator(authData, {
-                            newDocumentState: docData as any,
-                            assumedMasterState: doc.toJSON(true) as any
+                            newDocumentState: removeServerOnlyFields(docData as any),
+                            assumedMasterState: removeServerOnlyFields(doc.toJSON(true))
                         });
                         if (!isAllowed) {
+                            console.log('S: write not allowed');
+                            console.dir({
+                                newDocumentState: docData as any,
+                                assumedMasterState: doc.toJSON(true) as any
+                            });
                             closeConnection(res, 403, 'Forbidden');
                             return;
                         }
+
+                        console.log('S: PATCH DOC:');
+                        console.dir(docData);
                         promises.push(doc.patch(docData).catch(err => onWriteError(err, docData)));
                     }
                 }

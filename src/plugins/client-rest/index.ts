@@ -27,7 +27,6 @@ export class RxRestClient<RxDocType> {
             this.headers
         );
         this.handleError(response);
-        console.dir(response);
         return response;
     }
 
