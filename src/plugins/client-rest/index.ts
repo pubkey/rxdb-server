@@ -1,4 +1,4 @@
-import { ById, MangoQuery } from 'rxdb/plugins/core';
+import { ById, MangoQuery, newRxError } from 'rxdb/plugins/core';
 import { postRequest } from './utils.ts';
 import { Observable, Subject } from 'rxjs';
 import EventSource from 'eventsource';
@@ -14,12 +14,19 @@ export class RxRestClient<RxDocType> {
         this.headers = headers;
     }
 
+    handleError(response: any) {
+        if (response.error) {
+            throw new Error('Server returned an error ' + JSON.stringify(response));
+        }
+    }
+
     async query(query: MangoQuery<RxDocType>): Promise<{ documents: RxDocType[] }> {
         const response = await postRequest(
             this.endpointUrl + '/query',
             query,
             this.headers
         );
+        this.handleError(response);
         console.dir(response);
         return response;
     }
@@ -47,27 +54,33 @@ export class RxRestClient<RxDocType> {
     }
 
     get(ids: string[]): Promise<{ documents: RxDocType[] }> {
-        return postRequest(
+        const response = postRequest(
             this.endpointUrl + '/get',
             ids,
             this.headers
         );
+        this.handleError(response);
+        return response;
     }
 
     set(docs: RxDocType[]) {
-        return postRequest(
+        const response = postRequest(
             this.endpointUrl + '/set',
             docs,
             this.headers
         );
+        this.handleError(response);
+        return response;
     }
 
     delete(ids: string[]) {
-        return postRequest(
+        const response = postRequest(
             this.endpointUrl + '/delete',
             ids,
             this.headers
         );
+        this.handleError(response);
+        return response;
     }
 }
 

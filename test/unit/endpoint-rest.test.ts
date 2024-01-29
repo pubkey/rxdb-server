@@ -25,7 +25,7 @@ import {
     isFastMode,
     HumanDocumentType
 } from 'rxdb/plugins/test-utils';
-import { wait, waitUntil } from 'async-test-util';
+import { assertThrows, wait, waitUntil } from 'async-test-util';
 import EventSource from 'eventsource';
 
 import config from './config.ts';
@@ -79,6 +79,8 @@ describe('endpoint-rest.test.ts', () => {
                     passportId: { $eq: response.documents[0].passportId }
                 }
             });
+            console.log('response sub:');
+            console.dir(responseSub);
             assert.strictEqual(responseSub.documents.length, 1);
 
             await col.database.destroy();
@@ -101,6 +103,34 @@ describe('endpoint-rest.test.ts', () => {
             assert.strictEqual(response.documents.length, 1);
             assert.strictEqual(response.documents[0].passportId, 'only-matching');
 
+            await col.database.destroy();
+        });
+        it('should not allow $regex queries', async () => {
+            const col = await humansCollection.create(5);
+            await col.insert(schemaObjects.humanData('only-matching', 1, headers.userid));
+            const port = await nextPort();
+            const server = await startRxServer({
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                collection: col,
+                queryModifier
+            });
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            await assertThrows(
+                () => client.query({
+                    selector: {
+                        firstName: {
+                            $regex: 'foobar'
+                        }
+                    }
+                }),
+                Error,
+                'Bad Request'
+            );
             await col.database.destroy();
         });
     });

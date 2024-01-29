@@ -21,6 +21,7 @@ import {
     blockPreviousVersionPaths,
     closeConnection,
     docContainsServerOnlyFields,
+    doesContainRegexQuerySelector,
     getDocAllowedMatcher,
     setCors,
     writeSSEHeaders
@@ -47,10 +48,11 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
     readonly type = 'rest';
     readonly urlPath: string;
     readonly changeValidator: RxServerChangeValidator<AuthType, RxDocType>;
+    readonly queryModifier: RxServerQueryModifier<AuthType, RxDocType>;
     constructor(
         public readonly server: RxServer<AuthType>,
         public readonly collection: RxCollection<RxDocType>,
-        public readonly queryModifier: RxServerQueryModifier<AuthType, RxDocType>,
+        queryModifier: RxServerQueryModifier<AuthType, RxDocType>,
         changeValidator: RxServerChangeValidator<AuthType, RxDocType>,
         public readonly serverOnlyFields: string[],
         public readonly cors?: string
@@ -67,9 +69,18 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
             this.urlPath
         );
 
+        this.queryModifier = (authData, query) => {
+            if (doesContainRegexQuerySelector(query.selector)) {
+                throw new Error('$regex queries not allowed because of DOS-attacks');
+            }
+            return queryModifier(authData, query);
+        }
         this.changeValidator = (authData, change) => {
             if (
-                (change.assumedMasterState && docContainsServerOnlyFields(serverOnlyFields, change.assumedMasterState)) ||
+                (
+                    change.assumedMasterState &&
+                    docContainsServerOnlyFields(serverOnlyFields, change.assumedMasterState)
+                ) ||
                 docContainsServerOnlyFields(serverOnlyFields, change.newDocumentState)
             ) {
                 return false;
@@ -84,13 +95,20 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
 
         this.server.expressApp.post('/' + this.urlPath + '/query', async (req, res) => {
             const authData = getFromMapOrThrow(authDataByRequest, req);
-            const useQuery: FilledMangoQuery<RxDocType> = this.queryModifier(
-                ensureNotFalsy(authData),
-                normalizeMangoQuery(
-                    this.collection.schema.jsonSchema,
-                    req.body
-                )
-            );
+            let useQuery: FilledMangoQuery<RxDocType>
+            try {
+                useQuery = this.queryModifier(
+                    ensureNotFalsy(authData),
+                    normalizeMangoQuery(
+                        this.collection.schema.jsonSchema,
+                        req.body
+                    )
+                );
+            } catch (err) {
+                console.dir((err as any).message);
+                closeConnection(res, 400, 'Bad Request');
+                return;
+            }
             const rxQuery = this.collection.find(useQuery as any);
             const result = await rxQuery.exec();
             res.setHeader('Content-Type', 'application/json');

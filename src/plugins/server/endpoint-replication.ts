@@ -28,6 +28,7 @@ import {
     blockPreviousVersionPaths,
     closeConnection,
     docContainsServerOnlyFields,
+    doesContainRegexQuerySelector,
     getDocAllowedMatcher,
     setCors,
     writeSSEHeaders
@@ -43,10 +44,11 @@ export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServe
     readonly type = 'replication';
     readonly urlPath: string;
     readonly changeValidator: RxServerChangeValidator<AuthType, RxDocType>;
+    readonly queryModifier: RxServerQueryModifier<AuthType, RxDocType>;
     constructor(
         public readonly server: RxServer<AuthType>,
         public readonly collection: RxCollection<RxDocType>,
-        public readonly queryModifier: RxServerQueryModifier<AuthType, RxDocType>,
+        queryModifier: RxServerQueryModifier<AuthType, RxDocType>,
         changeValidator: RxServerChangeValidator<AuthType, RxDocType>,
         public readonly serverOnlyFields: string[],
         public readonly cors?: string,
@@ -62,6 +64,12 @@ export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServe
             this.urlPath
         );
 
+        this.queryModifier = (authData, query) => {
+            if (doesContainRegexQuerySelector(query.selector)) {
+                throw new Error('$regex queries not allowed because of DOS-attacks');
+            }
+            return queryModifier(authData, query);
+        }
         this.changeValidator = (authData, change) => {
             if (
                 (change.assumedMasterState && docContainsServerOnlyFields(serverOnlyFields, change.assumedMasterState)) ||

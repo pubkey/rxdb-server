@@ -5,7 +5,8 @@ import {
     overwritable
 } from 'rxdb/plugins/core';
 import {
-    startRxServer
+    startRxServer,
+    doesContainRegexQuerySelector
 } from '../../plugins/server';
 import {
     nextPort,
@@ -30,7 +31,6 @@ describe('server.test.ts', () => {
             if (config.storage.init) {
                 await config.storage.init();
             }
-
         });
     });
     describe('basics', () => {
@@ -44,6 +44,16 @@ describe('server.test.ts', () => {
             });
             assert.ok(server);
             await col.database.destroy();
+        });
+    });
+    describe('.doesContainRegexQuerySelector()', () => {
+        it('should return false', () => {
+            assert.strictEqual(doesContainRegexQuerySelector({ selector: { foo: { $eq: 'bar' } } }), false);
+            assert.strictEqual(doesContainRegexQuerySelector({ selector: {} }), false);
+        });
+        it('should return true', () => {
+            assert.strictEqual(doesContainRegexQuerySelector({ selector: { foo: { $regex: 'bar' } } }), true);
+            assert.strictEqual(doesContainRegexQuerySelector({ selector: { $regex: 'bar' } }), true);
         });
     });
 });

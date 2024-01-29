@@ -6,7 +6,14 @@ import type {
     NextFunction
 } from 'express';
 import { RxServerAuthData, RxServerEndpoint } from './types';
-import { FilledMangoQuery, RxReplicationWriteToMasterRow, flatClone, getQueryMatcher, normalizeMangoQuery } from 'rxdb/plugins/core';
+import {
+    FilledMangoQuery,
+    MangoQuerySelector,
+    RxReplicationWriteToMasterRow,
+    flatClone,
+    getQueryMatcher,
+    normalizeMangoQuery
+} from 'rxdb/plugins/core';
 
 export function setCors(
     server: RxServer<any>,
@@ -140,4 +147,40 @@ export function docContainsServerOnlyFields(
         return typeof doc[field] !== 'undefined'
     });
     return has;
+}
+
+
+/**
+ * $regex queries are dangerous because they can dos-attach the 
+ * 
+ * @param selector 
+ */
+export function doesContainRegexQuerySelector(selector: MangoQuerySelector<any> | any): boolean {
+    if (!selector) {
+        return false;
+    }
+    if (Array.isArray(selector)) {
+        const found = !!selector.find(item => doesContainRegexQuerySelector(item));
+        return found;
+    }
+
+    if (typeof selector !== 'object') {
+        return false;
+    }
+
+
+    console.dir(selector);
+    const entries = Object.entries(selector);
+    for (const [key, value] of entries) {
+        if (key === '$regex') {
+            return true;
+        } else {
+            const has = doesContainRegexQuerySelector(value);
+            if (has) {
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
