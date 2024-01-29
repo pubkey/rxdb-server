@@ -1,7 +1,8 @@
 import {
     FilledMangoQuery,
     RxCollection,
-    RxError
+    RxError,
+    normalizeMangoQuery
 } from 'rxdb/plugins/core';
 import type { RxServer } from './rx-server.ts';
 import type {
@@ -67,7 +68,10 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
             const authData = getFromMapOrThrow(authDataByRequest, req);
             const useQuery: FilledMangoQuery<RxDocType> = this.queryModifier(
                 ensureNotFalsy(authData),
-                req.body
+                normalizeMangoQuery(
+                    this.collection.schema.jsonSchema,
+                    req.body
+                )
             );
 
             console.log('S: query:');
@@ -88,13 +92,23 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
          * like ?query=e3NlbGVjdG9yOiB7fX0=
          */
         this.server.expressApp.get('/' + this.urlPath + '/query/observe', async (req, res) => {
+            console.log('XXXX QUERY OBSERVE !!');
             let authData = getFromMapOrThrow(authDataByRequest, req);
             writeSSEHeaders(res);
 
+            console.dir('S: ' + atob(req.query.query as string));
+
             const useQuery: FilledMangoQuery<RxDocType> = this.queryModifier(
                 ensureNotFalsy(authData),
-                JSON.parse(atob(req.query.query as string))
+                normalizeMangoQuery(
+                    this.collection.schema.jsonSchema,
+                    JSON.parse(atob(req.query.query as string))
+                )
             );
+
+            console.log('S: observe use query:');
+            console.dir(useQuery);
+
             const rxQuery = this.collection.find(useQuery as any);
             const subscription = rxQuery.$.pipe(
                 mergeMap(async (result) => {

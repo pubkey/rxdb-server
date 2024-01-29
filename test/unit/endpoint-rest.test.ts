@@ -3,6 +3,8 @@ import assert from 'assert';
 import {
     addRxPlugin,
     clone,
+    ensureNotFalsy,
+    lastOfArray,
     randomCouchString
 } from 'rxdb/plugins/core';
 import {
@@ -65,7 +67,7 @@ describe('endpoint-rest.test.ts', () => {
                 collection: col
             });
 
-            const client = createRestClient('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
 
 
             const response = await client.query({ selector: {} });
@@ -93,10 +95,103 @@ describe('endpoint-rest.test.ts', () => {
                 collection: col,
                 queryModifier
             });
-            const client = createRestClient('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
             const response = await client.query({ selector: {} });
             assert.strictEqual(response.documents.length, 1);
             assert.strictEqual(response.documents[0].passportId, 'only-matching');
+
+            await col.database.destroy();
+        });
+    });
+    describe('/query/observe', () => {
+        it('should return the correct query results', async () => {
+            const col = await humansCollection.create(5);
+            const port = await nextPort();
+            const server = await startRxServer({
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                collection: col
+            });
+
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            const emitted: HumanDocumentType[][] = [];
+            client.observeQuery({}).subscribe(result => emitted.push(result));
+
+            await waitUntil(() => emitted.length === 1);
+
+            await col.insert(schemaObjects.humanData('doc1', 1, headers.userid));
+            await waitUntil(() => emitted.length === 2);
+            await col.insert(schemaObjects.humanData('doc2', 1, headers.userid));
+            await waitUntil(() => emitted.length === 3);
+
+            const last = ensureNotFalsy(lastOfArray(emitted));
+            assert.strictEqual(last.length, 7);
+
+            await col.database.destroy();
+        });
+        it('should should automatically reconned', async () => {
+            const col = await humansCollection.create(5);
+            const port = await nextPort();
+            let server = await startRxServer({
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                collection: col
+            });
+
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            const emitted: HumanDocumentType[][] = [];
+            client.observeQuery({}).subscribe(result => emitted.push(result));
+            await waitUntil(() => emitted.length === 1);
+
+            await server.close();
+            await col.insert(schemaObjects.humanData('doc1', 1, headers.userid));
+
+            server = await startRxServer({
+                database: col.database,
+                authHandler,
+                port
+            });
+            await server.addRestEndpoint({
+                collection: col
+            });
+
+            await waitUntil(() => emitted.length === 2);
+
+            const last = ensureNotFalsy(lastOfArray(emitted));
+            assert.strictEqual(last.length, 6);
+
+            await col.database.destroy();
+        });
+        it('should respect the auth header and queryModifier', async () => {
+            const col = await humansCollection.create(5);
+            await col.insert(schemaObjects.humanData('only-matching', 1, headers.userid));
+            const port = await nextPort();
+            const server = await startRxServer({
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                collection: col,
+                queryModifier
+            });
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            const emitted: HumanDocumentType[][] = [];
+            client.observeQuery({}).subscribe(result => emitted.push(result));
+            await waitUntil(() => emitted.length === 1);
+
+            const last = ensureNotFalsy(lastOfArray(emitted));
+            assert.strictEqual(last[0].passportId, 'only-matching');
+            assert.strictEqual(last.length, 1);
 
             await col.database.destroy();
         });
@@ -141,7 +236,7 @@ describe('endpoint-rest.test.ts', () => {
                 collection: col,
                 queryModifier
             });
-            const client = createRestClient('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
             const response = await client.get(ids);
             assert.strictEqual(response.documents.length, 1);
             assert.strictEqual(response.documents[0].passportId, 'only-matching');
@@ -162,7 +257,7 @@ describe('endpoint-rest.test.ts', () => {
             const endpoint = await server.addRestEndpoint({
                 collection: col
             });
-            const client = createRestClient('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
 
             const setDoc = docs[0].toMutableJSON();
             setDoc.age = 100;

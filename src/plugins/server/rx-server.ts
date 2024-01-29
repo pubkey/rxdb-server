@@ -18,6 +18,8 @@ import { RxServerRestEndpoint } from './endpoint-rest.ts';
 export class RxServer<AuthType> {
     public readonly endpoints: RxServerEndpoint<AuthType, any>[] = [];
 
+    private closeFn = (() => this.close()).bind(this);
+
     constructor(
         public readonly database: RxDatabase,
         public readonly authHandler: RxServerAuthHandler<AuthType>,
@@ -25,7 +27,7 @@ export class RxServer<AuthType> {
         public readonly expressApp: Express,
         public readonly cors: string = '*'
     ) {
-        database.onDestroy.push(() => this.close());
+        database.onDestroy.push(this.closeFn);
     }
 
     public async addReplicationEndpoint<RxDocType>(opts: {
@@ -71,6 +73,7 @@ export class RxServer<AuthType> {
     }
 
     async close() {
+        this.database.onDestroy = this.database.onDestroy.filter(fn => fn !== this.closeFn);
         await new Promise<void>((res, rej) => {
             this.httpServer.close((err) => {
                 if (err) { rej(err); } else { res(); }
