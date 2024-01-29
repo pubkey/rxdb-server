@@ -6,8 +6,6 @@ import {
     RxStorageDefaultCheckpoint,
     StringKeys,
     prepareQuery,
-    getQueryMatcher,
-    normalizeMangoQuery,
     getChangedDocumentsSinceQuery
 } from 'rxdb/plugins/core';
 import { getReplicationHandlerByCollection } from 'rxdb/plugins/replication-websocket';
@@ -18,18 +16,13 @@ import type {
     RxServerEndpoint,
     RxServerQueryModifier
 } from './types.ts';
-import { filter, map, mergeMap } from 'rxjs';
+import { filter, mergeMap } from 'rxjs';
 import {
     ensureNotFalsy,
     getFromMapOrThrow,
     lastOfArray
 } from 'rxdb/plugins/utils';
 
-import type {
-    Request,
-    Response,
-    NextFunction
-} from 'express';
 import {
     addAuthMiddleware,
     blockPreviousVersionPaths,
@@ -70,7 +63,6 @@ export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServe
         );
 
         this.server.expressApp.get('/' + this.urlPath + '/pull', async (req, res) => {
-            console.log('-- PULL 1');
             const authData = getFromMapOrThrow(authDataByRequest, req);
             const id = req.query.id ? req.query.id as string : '';
             const lwt = req.query.lwt ? parseInt(req.query.lwt as any, 10) : 0;
@@ -105,8 +97,6 @@ export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServe
             const docDataMatcherWrite = getDocAllowedMatcher(this, ensureNotFalsy(authData));
             const rows: RxReplicationWriteToMasterRow<RxDocType>[] = req.body;
 
-            console.log('/push body:');
-            console.dir(req.body);
             for (const row of rows) {
                 // TODO remove this check
                 if (row.assumedMasterState && (row.assumedMasterState as any)._meta) {
@@ -143,14 +133,9 @@ export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServe
 
             const conflicts = await replicationHandler.masterWrite(rows);
             res.setHeader('Content-Type', 'application/json');
-
-            console.log('push result:');
-            console.dir(conflicts);
             res.json(conflicts);
         });
         this.server.expressApp.get('/' + this.urlPath + '/pullStream', async (req, res) => {
-            console.log('##### new pullStream request');
-
             writeSSEHeaders(res);
 
             const authData = getFromMapOrThrow(authDataByRequest, req);
@@ -169,9 +154,6 @@ export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServe
                         closeConnection(res, 401, 'Unauthorized');
                         return null;
                     }
-
-                    console.log('S: emit to stream:');
-                    console.dir(changes);
 
                     if (changes === 'RESYNC') {
                         return changes;
