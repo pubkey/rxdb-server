@@ -27,6 +27,7 @@ import {
     addAuthMiddleware,
     blockPreviousVersionPaths,
     closeConnection,
+    docContainsServerOnlyFields,
     getDocAllowedMatcher,
     setCors,
     writeSSEHeaders
@@ -38,29 +39,43 @@ export type RxReplicationEndpointMessageType = {
     params: any[];
 };
 
-
 export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServerEndpoint<AuthType, RxDocType> {
     readonly type = 'replication';
     readonly urlPath: string;
+    readonly changeValidator: RxServerChangeValidator<AuthType, RxDocType>;
     constructor(
         public readonly server: RxServer<AuthType>,
         public readonly collection: RxCollection<RxDocType>,
         public readonly queryModifier: RxServerQueryModifier<AuthType, RxDocType>,
-        public readonly changeValidator: RxServerChangeValidator<AuthType, RxDocType>,
-        public readonly cors?: string
+        changeValidator: RxServerChangeValidator<AuthType, RxDocType>,
+        public readonly serverOnlyFields: string[],
+        public readonly cors?: string,
     ) {
         setCors(this.server, [this.type, collection.name].join('/'), cors);
         blockPreviousVersionPaths(this.server, [this.type, collection.name].join('/'), collection.schema.version);
 
         this.urlPath = [this.type, collection.name, collection.schema.version].join('/');
 
-        console.log('SERVER URL PATH: ' + this.urlPath);
-
         const replicationHandler = getReplicationHandlerByCollection(this.server.database, collection.name);
         const authDataByRequest = addAuthMiddleware(
             this.server,
             this.urlPath
         );
+
+        this.changeValidator = (authData, change) => {
+            if (
+                (change.assumedMasterState && docContainsServerOnlyFields(serverOnlyFields, change.assumedMasterState)) ||
+                docContainsServerOnlyFields(serverOnlyFields, change.newDocumentState)
+            ) {
+                return false;
+            }
+            return changeValidator(authData, change);
+        }
+        const serverOnlyFieldsStencil: any = {
+            _meta: undefined,
+            _rev: undefined,
+        };
+        this.serverOnlyFields.forEach(field => serverOnlyFieldsStencil[field] = undefined);
 
         this.server.expressApp.get('/' + this.urlPath + '/pull', async (req, res) => {
             const authData = getFromMapOrThrow(authDataByRequest, req);
@@ -81,14 +96,15 @@ export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServe
                 useQueryChanges
             );
             const result = await this.collection.storageInstance.query(prepared);
-            const documents = result.documents;
-            const newCheckpoint = documents.length === 0 ? { id, lwt } : {
-                id: ensureNotFalsy(lastOfArray(documents))[this.collection.schema.primaryPath],
-                updatedAt: ensureNotFalsy(lastOfArray(documents))._meta.lwt
+
+            const newCheckpoint = result.documents.length === 0 ? { id, lwt } : {
+                id: ensureNotFalsy(lastOfArray(result.documents))[this.collection.schema.primaryPath],
+                updatedAt: ensureNotFalsy(lastOfArray(result.documents))._meta.lwt
             };
+            const responseDocuments = result.documents.map(d => Object.assign({}, d, serverOnlyFieldsStencil));
             res.setHeader('Content-Type', 'application/json');
             res.json({
-                documents,
+                documents: responseDocuments,
                 checkpoint: newCheckpoint
             });
         });
@@ -167,7 +183,13 @@ export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServe
                 }),
                 filter(f => f !== null && (f === 'RESYNC' || f.documents.length > 0))
             ).subscribe(filteredAndModified => {
-                res.write('data: ' + JSON.stringify(filteredAndModified) + '\n\n');
+                if (filteredAndModified === 'RESYNC') {
+                    res.write('data: ' + JSON.stringify(filteredAndModified) + '\n\n');
+                } else {
+                    const responseDocuments = ensureNotFalsy(filteredAndModified).documents.map(d => Object.assign({}, d, serverOnlyFieldsStencil));
+                    res.write('data: ' + JSON.stringify({ documents: responseDocuments, checkpoint: ensureNotFalsy(filteredAndModified).checkpoint }) + '\n\n');
+                }
+
             });
 
             /**

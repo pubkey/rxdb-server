@@ -39,13 +39,16 @@ export class RxServer<AuthType> {
          * Overwrites the cors option of the server.
          * [default='*']
          */
-        cors?: '*' | string
+        cors?: '*' | string,
+        serverOnlyFields?: string[]
     }) {
         const endpoint = new RxServerReplicationEndpoint(
             this,
             opts.collection,
             opts.queryModifier ? opts.queryModifier : (_a, q) => q,
-            opts.changeValidator ? opts.changeValidator : () => true
+            opts.changeValidator ? opts.changeValidator : () => true,
+            opts.serverOnlyFields ? opts.serverOnlyFields : [],
+            opts.cors
         );
         this.endpoints.push(endpoint);
         return endpoint;
@@ -60,13 +63,16 @@ export class RxServer<AuthType> {
          * Overwrites the cors option of the server.
          * [default='*']
          */
-        cors?: '*' | string
+        cors?: '*' | string,
+        serverOnlyFields?: string[]
     }) {
         const endpoint = new RxServerRestEndpoint(
             this,
             opts.collection,
             opts.queryModifier ? opts.queryModifier : (_a, q) => q,
-            opts.changeValidator ? opts.changeValidator : () => true
+            opts.changeValidator ? opts.changeValidator : () => true,
+            opts.serverOnlyFields ? opts.serverOnlyFields : [],
+            opts.cors
         );
         this.endpoints.push(endpoint);
         return endpoint;

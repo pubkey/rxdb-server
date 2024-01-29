@@ -6,7 +6,7 @@ import type {
     NextFunction
 } from 'express';
 import { RxServerAuthData, RxServerEndpoint } from './types';
-import { FilledMangoQuery, getQueryMatcher, normalizeMangoQuery } from 'rxdb/plugins/core';
+import { FilledMangoQuery, RxReplicationWriteToMasterRow, flatClone, getQueryMatcher, normalizeMangoQuery } from 'rxdb/plugins/core';
 
 export function setCors(
     server: RxServer<any>,
@@ -130,4 +130,14 @@ export function writeSSEHeaders(res: Response) {
         'X-Accel-Buffering': 'no'
     });
     res.flushHeaders();
+}
+
+export function docContainsServerOnlyFields(
+    serverOnlyFields: string[],
+    doc: any
+) {
+    const has = serverOnlyFields.find(field => {
+        return typeof doc[field] !== 'undefined'
+    });
+    return has;
 }

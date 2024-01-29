@@ -20,6 +20,7 @@ import {
     addAuthMiddleware,
     blockPreviousVersionPaths,
     closeConnection,
+    docContainsServerOnlyFields,
     getDocAllowedMatcher,
     setCors,
     writeSSEHeaders
@@ -45,11 +46,13 @@ export const REST_PATHS = [
 export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoint<AuthType, RxDocType> {
     readonly type = 'rest';
     readonly urlPath: string;
+    readonly changeValidator: RxServerChangeValidator<AuthType, RxDocType>;
     constructor(
         public readonly server: RxServer<AuthType>,
         public readonly collection: RxCollection<RxDocType>,
         public readonly queryModifier: RxServerQueryModifier<AuthType, RxDocType>,
-        public readonly changeValidator: RxServerChangeValidator<AuthType, RxDocType>,
+        changeValidator: RxServerChangeValidator<AuthType, RxDocType>,
+        public readonly serverOnlyFields: string[],
         public readonly cors?: string
     ) {
         setCors(this.server, [this.type, collection.name].join('/'), cors);
@@ -64,6 +67,21 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
             this.urlPath
         );
 
+        this.changeValidator = (authData, change) => {
+            if (
+                (change.assumedMasterState && docContainsServerOnlyFields(serverOnlyFields, change.assumedMasterState)) ||
+                docContainsServerOnlyFields(serverOnlyFields, change.newDocumentState)
+            ) {
+                return false;
+            }
+            return changeValidator(authData, change);
+        }
+        const serverOnlyFieldsStencil: any = {
+            _meta: undefined,
+            _rev: undefined,
+        };
+        this.serverOnlyFields.forEach(field => serverOnlyFieldsStencil[field] = undefined);
+
         this.server.expressApp.post('/' + this.urlPath + '/query', async (req, res) => {
             const authData = getFromMapOrThrow(authDataByRequest, req);
             const useQuery: FilledMangoQuery<RxDocType> = this.queryModifier(
@@ -77,7 +95,7 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
             const result = await rxQuery.exec();
             res.setHeader('Content-Type', 'application/json');
             res.json({
-                documents: result.map(d => d.toJSON())
+                documents: result.map(d => Object.assign({}, d.toJSON(), serverOnlyFieldsStencil))
             });
         });
 
@@ -101,7 +119,7 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
             const rxQuery = this.collection.find(useQuery as any);
             const subscription = rxQuery.$.pipe(
                 mergeMap(async (result) => {
-                    const resultData = result.map(doc => doc.toJSON());
+                    const resultData = result.map(doc => Object.assign({}, doc.toJSON(), serverOnlyFieldsStencil));
 
                     /**
                      * The auth-data might be expired
@@ -142,6 +160,7 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
             const docMatcher = getDocAllowedMatcher(this, ensureNotFalsy(authData));
             let useDocs = resultValues.map(d => d.toJSON());
             useDocs = useDocs.filter(d => docMatcher(d as any));
+            useDocs = useDocs.map(d => Object.assign({}, d, serverOnlyFieldsStencil))
 
             res.setHeader('Content-Type', 'application/json');
             res.json({

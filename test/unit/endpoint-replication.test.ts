@@ -1,6 +1,7 @@
 import assert from 'assert';
 
 import {
+    RxDocumentData,
     addRxPlugin,
     clone,
     randomCouchString
@@ -215,8 +216,6 @@ describe('endpoint-replication.test.ts', () => {
             });
             await replicationState.awaitInSync();
 
-            console.log(':::::::::::::::::::::::::::::::: 1');
-
             // server to client
             await col.insert(schemaObjects.humanData());
             await waitUntil(async () => {
@@ -224,14 +223,12 @@ describe('endpoint-replication.test.ts', () => {
                 return docs.length === 11;
             });
 
-            console.log(':::::::::::::::::::::::::::::::: 2');
             // client to server
             await clientCol.insert(schemaObjects.humanData());
             await waitUntil(async () => {
                 const docs = await col.find().exec();
                 return docs.length === 12;
             });
-            console.log(':::::::::::::::::::::::::::::::: 3');
 
             // do not miss updates when connection is dropped
             server.httpServer.closeAllConnections();
@@ -240,7 +237,6 @@ describe('endpoint-replication.test.ts', () => {
                 const docs = await clientCol.find().exec();
                 return docs.length === 13;
             });
-            console.log(':::::::::::::::::::::::::::::::: 4');
 
             col.database.destroy();
             clientCol.database.destroy();
@@ -267,7 +263,6 @@ describe('endpoint-replication.test.ts', () => {
                 const data = await response.json();
                 console.dir(data);
             }
-            console.log(':::::000000 0');
 
             // check with replication
             const clientCol = await humansCollection.create(1);
@@ -286,29 +281,21 @@ describe('endpoint-replication.test.ts', () => {
             let emittedUnauthorized = false;
             replicationState.unauthorized$.subscribe(() => emittedUnauthorized = true);
 
-            console.log(':::::000000 1');
-
             await waitUntil(() => emittedUnauthorized === true);
 
-            console.log(':::::000000 2');
             // setting correct headers afterwards should make the replication work again
             replicationState.headers = headers;
             await replicationState.awaitInSync();
-            console.log(':::::000000 3');
 
             await col.insert(schemaObjects.humanData('after-correct-headers'));
-            console.log(':::::000000 3.1');
             await waitUntil(async () => {
                 const docs = await clientCol.find().exec();
                 console.log('dcos.lenght:' + docs.length);
                 return docs.length === 3;
             }, 2500, 150);
-            console.log(':::::000000 4');
 
             await replicationState.awaitInSync();
-            console.log(':::::000000 5');
             await col.insert(schemaObjects.humanData('after-correct-headers-ongoing'));
-            console.log(':::::000000 6');
             await waitUntil(async () => {
                 const docs = await clientCol.find().exec();
                 return docs.length === 4;
@@ -498,6 +485,75 @@ describe('endpoint-replication.test.ts', () => {
 
             serverCol.database.destroy();
             clientCol.database.destroy();
+        });
+    });
+    describe('.serverOnlyFields', () => {
+        it('should not return serverOnlyFields to /pull requests', async () => {
+            const col = await humansCollection.create(3);
+            const port = await nextPort();
+            const server = await startRxServer({
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addReplicationEndpoint({
+                collection: col,
+                serverOnlyFields: ['lastName']
+            });
+            const url = 'http://localhost:' + port + '/' + endpoint.urlPath + '/pull';
+            const response = await fetch(url, {
+                headers
+            });
+            const data = await response.json();
+
+            console.dir(data);
+
+            data.documents.forEach((doc: RxDocumentData<HumanDocumentType>) => {
+                assert.strictEqual(typeof doc.lastName, 'undefined');
+
+                // these fields must also not be set
+                assert.strictEqual(typeof doc._rev, 'undefined');
+                assert.strictEqual(typeof doc._meta, 'undefined');
+            });
+
+            await col.database.destroy();
+        });
+        it('should not emit serverOnlyFields to /pullStream', async () => {
+            const col = await humansCollection.create(3);
+            const port = await nextPort();
+            const server = await startRxServer({
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addReplicationEndpoint({
+                collection: col,
+                serverOnlyFields: ['lastName']
+            });
+            const url = 'http://localhost:' + port + '/' + endpoint.urlPath + '/pullStream';
+            const eventSource = new EventSource(url, { headers });
+            const emitted: { documents: RxDocumentData<HumanDocumentType>[] }[] = [];
+            eventSource.onmessage = event => {
+                const eventData = JSON.parse(event.data);
+                emitted.push(eventData);
+            };
+
+            await waitUntil(async () => {
+                await col.insert(schemaObjects.humanData());
+                return emitted.length > 3;
+            });
+
+            emitted.forEach(ev => {
+                ev.documents.forEach((doc: RxDocumentData<HumanDocumentType>) => {
+                    assert.strictEqual(typeof doc.lastName, 'undefined');
+
+                    // these fields must also not be set
+                    assert.strictEqual(typeof doc._rev, 'undefined');
+                    assert.strictEqual(typeof doc._meta, 'undefined');
+                });
+            });
+
+            await col.database.destroy();
         });
     });
 });

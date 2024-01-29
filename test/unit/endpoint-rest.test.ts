@@ -1,6 +1,7 @@
 import assert from 'assert';
 
 import {
+    RxDocumentData,
     addRxPlugin,
     clone,
     ensureNotFalsy,
@@ -370,6 +371,7 @@ describe('endpoint-rest.test.ts', () => {
                 collection: col,
                 changeValidator: () => false
             });
+
             const client = createRestClient('http://localhost:' + port + '/' + endpoint.urlPath, headers);
 
             await client.delete(ids);
@@ -378,6 +380,63 @@ describe('endpoint-rest.test.ts', () => {
             const docsAfter = await col.find().exec();
             assert.strictEqual(docsAfter.length, 5);
 
+            await col.database.destroy();
+        });
+    });
+    describe('.serverOnlyFields', () => {
+        it('should not return serverOnlyFields to /query requests', async () => {
+            const col = await humansCollection.create(3);
+            const port = await nextPort();
+            const server = await startRxServer({
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                collection: col,
+                serverOnlyFields: ['lastName']
+            });
+            const client = createRestClient('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            const response = await client.query({});
+
+            console.log('res:');
+            console.dir(response);
+
+
+            response.documents.forEach((doc: any) => {
+                assert.strictEqual(typeof doc.lastName, 'undefined');
+
+                // these fields must also not be set
+                assert.strictEqual(typeof doc._rev, 'undefined');
+                assert.strictEqual(typeof doc._meta, 'undefined');
+            });
+
+            await col.database.destroy();
+        });
+        it('should not emit serverOnlyFields to /get', async () => {
+            const col = await humansCollection.create(3);
+            const docs = await col.find().exec();
+            const ids = docs.map(d => d.passportId);
+            const port = await nextPort();
+            const server = await startRxServer({
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                collection: col,
+                serverOnlyFields: ['lastName']
+            });
+            const client = createRestClient('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+            const response = await client.get(ids);
+            response.documents.forEach((doc: any) => {
+                assert.strictEqual(typeof doc.lastName, 'undefined');
+
+                // these fields must also not be set
+                assert.strictEqual(typeof doc._rev, 'undefined');
+                assert.strictEqual(typeof doc._meta, 'undefined');
+            });
             await col.database.destroy();
         });
     });
