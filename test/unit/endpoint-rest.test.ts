@@ -298,4 +298,87 @@ describe('endpoint-rest.test.ts', () => {
 
         });
     });
+    describe('/delete', () => {
+        it('should delete the documents', async () => {
+            const col = await humansCollection.create(5);
+            const docs = await col.find().exec();
+            const ids = docs.map(d => d.passportId);
+            const port = await nextPort();
+            const server = await startRxServer({
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                collection: col
+            });
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+
+            await client.delete(ids);
+
+            const docsAfter = await col.find().exec();
+            assert.strictEqual(docsAfter.length, 0);
+
+            await col.database.destroy();
+        });
+        it('should not accept if not matches queryModifier says no', async () => {
+            const col = await humansCollection.create(5);
+            const docs = await col.find().exec();
+            const ids = docs.map(d => d.passportId);
+
+
+
+            const port = await nextPort();
+            const server = await startRxServer({
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                collection: col,
+                queryModifier
+            });
+            const client = createRestClient('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            await client.delete(ids);
+
+            // must still be the same because write must not be accepted
+            const docsAfter = await col.find().exec();
+            assert.strictEqual(docsAfter.length, 5);
+
+            // but the only matching doc should be allowed to be deleted
+            const matchingDoc = await col.insert(schemaObjects.humanData('only-matching', 1, headers.userid));
+            await client.delete([matchingDoc.primary]);
+            const docsAfter2 = await col.find().exec();
+            assert.strictEqual(docsAfter2.length, 5);
+
+            await col.database.destroy();
+
+        });
+        it('should not accept if changeValidator says no', async () => {
+            const col = await humansCollection.create(5);
+            const docs = await col.find().exec();
+            const ids = docs.map(d => d.passportId);
+            const port = await nextPort();
+            const server = await startRxServer({
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                collection: col,
+                changeValidator: () => false
+            });
+            const client = createRestClient('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            await client.delete(ids);
+
+            // must still be the same because write must not be accepted
+            const docsAfter = await col.find().exec();
+            assert.strictEqual(docsAfter.length, 5);
+
+            await col.database.destroy();
+        });
+    });
 });

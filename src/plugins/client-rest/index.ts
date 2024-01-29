@@ -61,6 +61,14 @@ export class RxRestClient<RxDocType> {
             this.headers
         );
     }
+
+    delete(ids: string[]) {
+        return postRequest(
+            this.endpointUrl + '/delete',
+            ids,
+            this.headers
+        );
+    }
 }
 
 export function createRestClient<RxDocType>(

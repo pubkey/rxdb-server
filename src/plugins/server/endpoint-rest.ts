@@ -73,11 +73,6 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
                     req.body
                 )
             );
-
-            console.log('S: query:');
-            console.log(JSON.stringify(req.body));
-            console.dir(useQuery);
-
             const rxQuery = this.collection.find(useQuery as any);
             const result = await rxQuery.exec();
             res.setHeader('Content-Type', 'application/json');
@@ -92,11 +87,8 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
          * like ?query=e3NlbGVjdG9yOiB7fX0=
          */
         this.server.expressApp.get('/' + this.urlPath + '/query/observe', async (req, res) => {
-            console.log('XXXX QUERY OBSERVE !!');
             let authData = getFromMapOrThrow(authDataByRequest, req);
             writeSSEHeaders(res);
-
-            console.dir('S: ' + atob(req.query.query as string));
 
             const useQuery: FilledMangoQuery<RxDocType> = this.queryModifier(
                 ensureNotFalsy(authData),
@@ -105,9 +97,6 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
                     JSON.parse(atob(req.query.query as string))
                 )
             );
-
-            console.log('S: observe use query:');
-            console.dir(useQuery);
 
             const rxQuery = this.collection.find(useQuery as any);
             const subscription = rxQuery.$.pipe(
@@ -125,9 +114,6 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
                         closeConnection(res, 401, 'Unauthorized');
                         return null;
                     }
-
-                    console.log('S: emit to stream:');
-                    console.dir(resultData);
 
                     return resultData;
                 }),
@@ -222,20 +208,29 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
             const docDataMatcherWrite = getDocAllowedMatcher(this, ensureNotFalsy(authData));
 
             let ids: string[] = req.body;
-
             while (ids.length > 0) {
-                const useIds = ids;
+                const useIds = ids.slice(0);
                 ids = [];
                 const promises: Promise<any>[] = [];
-                const docsMap = await this.collection.findByIds(ids).exec();
+                const docsMap = await this.collection.findByIds(useIds).exec();
                 for (const id of useIds) {
                     const doc = docsMap.get(id);
                     if (doc) {
-                        const isAllowed = docDataMatcherWrite(doc.toJSON(true) as any);
-                        if (!isAllowed) {
+                        const isAllowedDoc = docDataMatcherWrite(doc.toJSON(true) as any);
+                        if (!isAllowedDoc) {
                             closeConnection(res, 403, 'Forbidden');
                             return;
                         }
+
+                        const isAllowedChange = this.changeValidator(authData, {
+                            newDocumentState: doc.toJSON(true) as any,
+                            assumedMasterState: doc.toJSON(true) as any
+                        });
+                        if (!isAllowedChange) {
+                            closeConnection(res, 403, 'Forbidden');
+                            return;
+                        }
+
                         promises.push(doc.remove().catch((err: RxError) => {
                             if (err.rxdb && err.code === 'CONFLICT') {
                                 // just retry on conflicts
