@@ -54,7 +54,7 @@ jobs:
       - name: add git tag
         run: |
           git add .
-          git commit -m ${{ steps.vars.outputs.version }}
+          git diff --quiet && git diff --staged --quiet || git commit -m ${{ steps.vars.outputs.version }}
           git tag ${{ steps.vars.outputs.version }}
 
       - run: npm publish --tag next
