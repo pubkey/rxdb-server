@@ -27,8 +27,8 @@ cd ./test-integration
 # replace imports
 find test -type f -exec sed -i 's|\.\.\/\.\.\/plugins\/server|rxdb-server/plugins/server|g' {} +
 find test -type f -exec sed -i 's|\.\.\/\.\.\/plugins\/replication-server|rxdb-server/plugins/replication-server|g' {} +
+find test -type f -exec sed -i 's|\.\.\/\.\.\/plugins\/client-rest|rxdb-server/plugins/client-rest|g' {} +
 find test -type f -exec sed -i 's|\.\.\/\.\.\/plugins\/test-utils\/index\.mjs|rxdb/plugins/test-utils|g' {} +
-find test -type f -exec sed -i 's|\.\.\/\.\.\/plugins\/client-rest\/index\.mjs|rxdb/plugins/client-rest|g' {} +
 
 npm install
 npm install rxdb@$RXDB_VERSION
