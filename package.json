@@ -59,7 +59,7 @@
     "// build:bundle": "bundles the npm module so it can be installed into other folder to run tests",
     "build:bundle": "rimraf -rf rxdb-server.tgz && npx yarn@1.22.10 pack ./ --filename ./rxdb-server.tgz",
     "check-types": "npm run build && tsc",
-    "test:unit": "npm run build && ts-mocha ./test/unit.test.ts --bail",
+    "test:unit": "npm run build && ts-mocha ./test/unit.test.ts --bail --exit",
     "test:integration:init": "(cd ./scripts && bash test-integration-init.sh)",
     "test:integration:memory": "(cd test-integration && npm run transpile && npm run test:node:memory)",
     "test:integration:foundationdb": "(cd test-integration && npm run transpile && npm run test:node:foundationdb)",
