@@ -49,7 +49,6 @@ export function blockPreviousVersionPaths(
     while (v < currentVersion) {
         const version = v;
         server.expressApp.all('/' + path + '/' + version + '/*', (req, res) => {
-            console.log('S: autdated version ' + version);
             closeConnection(res, 426, 'Outdated version ' + version + ' (newest is ' + currentVersion + ')');
         });
         v++;
@@ -58,14 +57,11 @@ export function blockPreviousVersionPaths(
 
 
 export async function closeConnection(response: Response, code: number, message: string) {
-    console.log('# CLOSE CONNECTION');
     const responseWrite = {
         code,
         error: true,
         message
     };
-
-    console.log('close connection!');
     response.statusCode = code;
     response.set("Connection", "close");
     await response.write(JSON.stringify(responseWrite));

@@ -50,16 +50,17 @@ export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServe
     readonly queryModifier: RxServerQueryModifier<AuthType, RxDocType>;
     constructor(
         public readonly server: RxServer<AuthType>,
+        public readonly name: string,
         public readonly collection: RxCollection<RxDocType>,
         queryModifier: RxServerQueryModifier<AuthType, RxDocType>,
         changeValidator: RxServerChangeValidator<AuthType, RxDocType>,
         public readonly serverOnlyFields: string[],
         public readonly cors?: string,
     ) {
-        setCors(this.server, [this.type, collection.name].join('/'), cors);
-        blockPreviousVersionPaths(this.server, [this.type, collection.name].join('/'), collection.schema.version);
+        setCors(this.server, [this.name].join('/'), cors);
+        blockPreviousVersionPaths(this.server, [this.name].join('/'), collection.schema.version);
 
-        this.urlPath = [this.type, collection.name, collection.schema.version].join('/');
+        this.urlPath = [this.name, collection.schema.version].join('/');
 
         const primaryPath = this.collection.schema.primaryPath;
         const replicationHandler = getReplicationHandlerByCollection(this.server.database, collection.name);
@@ -79,7 +80,6 @@ export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServe
                 (change.assumedMasterState && docContainsServerOnlyFields(serverOnlyFields, change.assumedMasterState)) ||
                 docContainsServerOnlyFields(serverOnlyFields, change.newDocumentState)
             ) {
-                console.log('NOT VALID BECAISE SERVER ONLY FIELDS');
                 return false;
             }
             return changeValidator(authData, change);

@@ -31,6 +31,7 @@ export class RxServer<AuthType> {
     }
 
     public async addReplicationEndpoint<RxDocType>(opts: {
+        name: string,
         collection: RxCollection<RxDocType>,
         queryModifier?: RxServerQueryModifier<AuthType, RxDocType>,
         changeValidator?: RxServerChangeValidator<AuthType, RxDocType>,
@@ -44,6 +45,7 @@ export class RxServer<AuthType> {
     }) {
         const endpoint = new RxServerReplicationEndpoint(
             this,
+            opts.name,
             opts.collection,
             opts.queryModifier ? opts.queryModifier : (_a, q) => q,
             opts.changeValidator ? opts.changeValidator : () => true,
@@ -55,6 +57,7 @@ export class RxServer<AuthType> {
     }
 
     public async addRestEndpoint<RxDocType>(opts: {
+        name: string,
         collection: RxCollection<RxDocType>,
         queryModifier?: RxServerQueryModifier<AuthType, RxDocType>,
         changeValidator?: RxServerChangeValidator<AuthType, RxDocType>,
@@ -68,6 +71,7 @@ export class RxServer<AuthType> {
     }) {
         const endpoint = new RxServerRestEndpoint(
             this,
+            opts.name,
             opts.collection,
             opts.queryModifier ? opts.queryModifier : (_a, q) => q,
             opts.changeValidator ? opts.changeValidator : () => true,

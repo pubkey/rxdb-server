@@ -2,7 +2,7 @@
   "name": "rxdb-server",
   "version": "0.0.0",
   "description": "RxDB Server Plugin",
-  "license": "TODO",
+  "license": "SSPL",
   "author": "pubkey",
   "repository": {
     "type": "git",

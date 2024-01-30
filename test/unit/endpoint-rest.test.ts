@@ -50,6 +50,20 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             await server.addRestEndpoint({
+                name: randomCouchString(10),
+                collection: col
+            });
+            await col.database.destroy();
+        });
+        it('should work without auth handler', async () => {
+            const port = await nextPort();
+            const col = await humansCollection.create(0);
+            const server = await startRxServer({
+                database: col.database,
+                port
+            });
+            await server.addRestEndpoint({
+                name: randomCouchString(10),
                 collection: col
             });
             await col.database.destroy();
@@ -65,6 +79,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
+                name: randomCouchString(10),
                 collection: col
             });
 
@@ -79,8 +94,6 @@ describe('endpoint-rest.test.ts', () => {
                     passportId: { $eq: response.documents[0].passportId }
                 }
             });
-            console.log('response sub:');
-            console.dir(responseSub);
             assert.strictEqual(responseSub.documents.length, 1);
 
             await col.database.destroy();
@@ -95,6 +108,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
+                name: randomCouchString(10),
                 collection: col,
                 queryModifier
             });
@@ -115,6 +129,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
+                name: randomCouchString(10),
                 collection: col,
                 queryModifier
             });
@@ -144,6 +159,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
+                name: randomCouchString(10),
                 collection: col
             });
 
@@ -164,7 +180,7 @@ describe('endpoint-rest.test.ts', () => {
 
             await col.database.destroy();
         });
-        it('should should automatically reconned', async () => {
+        it('should should automatically reconnect', async () => {
             const col = await humansCollection.create(5);
             const port = await nextPort();
             let server = await startRxServer({
@@ -173,6 +189,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
+                name: randomCouchString(10),
                 collection: col
             });
 
@@ -191,6 +208,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             await server.addRestEndpoint({
+                name: randomCouchString(10),
                 collection: col
             });
 
@@ -211,6 +229,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
+                name: randomCouchString(10),
                 collection: col,
                 queryModifier
             });
@@ -239,6 +258,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
+                name: randomCouchString(10),
                 collection: col
             });
             const client = createRestClient('http://localhost:' + port + '/' + endpoint.urlPath, headers);
@@ -264,6 +284,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
+                name: randomCouchString(10),
                 collection: col,
                 queryModifier
             });
@@ -286,6 +307,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
+                name: randomCouchString(10),
                 collection: col
             });
             const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
@@ -309,6 +331,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
+                name: randomCouchString(10),
                 collection: col,
                 changeValidator: () => false
             });
@@ -341,6 +364,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
+                name: randomCouchString(10),
                 collection: col
             });
             const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
@@ -367,6 +391,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
+                name: randomCouchString(10),
                 collection: col,
                 queryModifier
             });
@@ -398,6 +423,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
+                name: randomCouchString(10),
                 collection: col,
                 changeValidator: () => false
             });
@@ -423,16 +449,13 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
+                name: randomCouchString(10),
                 collection: col,
                 serverOnlyFields: ['lastName']
             });
             const client = createRestClient('http://localhost:' + port + '/' + endpoint.urlPath, headers);
 
             const response = await client.query({});
-
-            console.log('res:');
-            console.dir(response);
-
 
             response.documents.forEach((doc: any) => {
                 assert.strictEqual(typeof doc.lastName, 'undefined');
@@ -455,6 +478,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
+                name: randomCouchString(10),
                 collection: col,
                 serverOnlyFields: ['lastName']
             });
@@ -479,6 +503,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
+                name: randomCouchString(10),
                 collection: col,
                 serverOnlyFields: ['lastName']
             });

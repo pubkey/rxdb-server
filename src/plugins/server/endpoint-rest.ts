@@ -52,18 +52,17 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
     readonly queryModifier: RxServerQueryModifier<AuthType, RxDocType>;
     constructor(
         public readonly server: RxServer<AuthType>,
+        public readonly name: string,
         public readonly collection: RxCollection<RxDocType>,
         queryModifier: RxServerQueryModifier<AuthType, RxDocType>,
         changeValidator: RxServerChangeValidator<AuthType, RxDocType>,
         public readonly serverOnlyFields: string[],
         public readonly cors?: string
     ) {
-        setCors(this.server, [this.type, collection.name].join('/'), cors);
-        blockPreviousVersionPaths(this.server, [this.type, collection.name].join('/'), collection.schema.version);
+        setCors(this.server, [this.name].join('/'), cors);
+        blockPreviousVersionPaths(this.server, [this.name].join('/'), collection.schema.version);
 
-        this.urlPath = [this.type, collection.name, collection.schema.version].join('/');
-        console.log('REST SERVER URL PATH: ' + this.urlPath);
-
+        this.urlPath = [this.name, collection.schema.version].join('/');
         const primaryPath = this.collection.schema.primaryPath;
         const authDataByRequest = addAuthMiddleware(
             this.server,
@@ -211,35 +210,20 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
                 const docs = await collection.findByIds(docsData.map(d => (d as any)[primaryPath])).exec();
                 let useDocsData = docsData.slice();
                 docsData = [];
-
-                console.log('S docs:');
-                console.dir(Array.from(docs.values()).map(d => d.toJSON()));
-
                 for (const docData of useDocsData) {
                     const id = (docData as any)[primaryPath];
                     const doc = docs.get(id);
                     if (!doc) {
                         promises.push(this.collection.insert(docData).catch(err => onWriteError(err, docData)));
                     } else {
-
-                        console.log('S: UPDATE');
-
                         const isAllowed = this.changeValidator(authData, {
                             newDocumentState: removeServerOnlyFields(docData as any),
                             assumedMasterState: removeServerOnlyFields(doc.toJSON(true))
                         });
                         if (!isAllowed) {
-                            console.log('S: write not allowed');
-                            console.dir({
-                                newDocumentState: docData as any,
-                                assumedMasterState: doc.toJSON(true) as any
-                            });
                             closeConnection(res, 403, 'Forbidden');
                             return;
                         }
-
-                        console.log('S: PATCH DOC:');
-                        console.dir(docData);
                         promises.push(doc.patch(docData).catch(err => onWriteError(err, docData)));
                     }
                 }

@@ -11,7 +11,7 @@ import { Express } from 'express';
 
 export type RxServerOptions<AuthType> = {
     database: RxDatabase;
-    authHandler: RxServerAuthHandler<AuthType>;
+    authHandler?: RxServerAuthHandler<AuthType>;
     serverApp?: Express;
     appOptions?: any;
     /**
@@ -78,6 +78,7 @@ export type RxServerChangeValidator<AuthType, RxDocType> = (
 
 export interface RxServerEndpoint<AuthType, RxDocType> {
     collection: RxCollection<RxDocType>;
+    name: string;
     type: 'replication' | 'rest' | string;
     urlPath: string;
     queryModifier?: RxServerQueryModifier<AuthType, RxDocType>;

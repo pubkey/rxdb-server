@@ -1,6 +1,6 @@
 import { ensureNotFalsy, flatClone } from 'rxdb/plugins/utils';
 import { RxServer } from './rx-server.ts';
-import { RxServerOptions } from './types.ts';
+import { RxServerAuthHandler, RxServerOptions } from './types.ts';
 import express from 'express';
 import {
     Server as HttpServer
@@ -28,9 +28,16 @@ export async function startRxServer<AuthType>(options: RxServerOptions<AuthType>
         });
     });
 
+    const authHandler: RxServerAuthHandler<AuthType> = options.authHandler ? options.authHandler : () => {
+        return {
+            data: {} as any,
+            validUntil: Date.now() * 2
+        };
+    };
+
     const server = new RxServer<AuthType>(
         options.database,
-        options.authHandler,
+        authHandler,
         httpServer,
         ensureNotFalsy(options.serverApp),
         options.cors
