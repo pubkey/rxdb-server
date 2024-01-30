@@ -70,6 +70,7 @@ jobs:
           path: |
             ~/.npm
             ./node_modules
+            /tmp/.buildx-cache
           key: ${{ runner.os }}-npm-storage-dexie-x3-${{ hashFiles('**/package.json') }}
           restore-keys: |
             ${{ runner.os }}-npm-storage-dexie-x3-
