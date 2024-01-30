@@ -25,11 +25,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-npm-release-x2-
 
-      - name: Set git config
-        run: |
-          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-
       - run: npm install
       - run: npm run build
 
@@ -51,12 +46,6 @@ jobs:
           echo "version: ${{ steps.vars.outputs.version }}"
           echo "prerelease: ${{ steps.vars.outputs.prerelease }}"
 
-      - name: add git tag
-        run: |
-          git add .
-          git diff --quiet && git diff --staged --quiet || git commit -m ${{ steps.vars.outputs.version }}
-          git tag ${{ steps.vars.outputs.version }}
-
       - run: npm publish --tag next
         if: steps.vars.outputs.prerelease == 'true'
         working-directory: release-npm
@@ -68,11 +57,4 @@ jobs:
         working-directory: release-npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Push changes
-        uses: ad-m/github-push-action@master
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ github.ref }}
-
 
