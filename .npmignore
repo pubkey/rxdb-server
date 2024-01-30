@@ -16,5 +16,7 @@ renovate.json
 tsconfig.json
 tsconfig.lint.json
 rxdb-server.tgz
+babel.config.js
+.nvmrc
 
 test_tmp/
