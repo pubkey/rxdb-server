@@ -48,13 +48,11 @@ jobs:
 
       - run: npm publish --tag next
         if: steps.vars.outputs.prerelease == 'true'
-        working-directory: release-npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - run: npm publish
         if: steps.vars.outputs.prerelease == 'false'
-        working-directory: release-npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
