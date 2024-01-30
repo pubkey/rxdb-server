@@ -58,6 +58,7 @@
     "build:plugins": "node ./scripts/generate-plugins-package-json.mjs",
     "// build:bundle": "bundles the npm module so it can be installed into other folder to run tests",
     "build:bundle": "rimraf -rf rxdb-server.tgz && npx yarn@1.22.10 pack ./ --filename ./rxdb-server.tgz",
+    "version": "node ./scripts/version.js",
     "check-types": "npm run build && tsc",
     "test:unit": "npm run build && ts-mocha ./test/unit.test.ts --bail --exit",
     "test:integration:init": "(cd ./scripts && bash test-integration-init.sh)",
