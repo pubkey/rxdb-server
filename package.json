@@ -99,7 +99,7 @@
     "@babel/preset-env": "7.23.3",
     "@babel/preset-typescript": "7.23.3",
     "@babel/types": "7.23.5",
-    "@faker-js/faker": "8.3.1",
+    "@faker-js/faker": "8.4.0",
     "@types/mocha": "10.0.6",
     "@types/node": "20.10.5",
     "@types/sqlite3": "3.1.11",
