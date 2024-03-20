@@ -130,7 +130,7 @@
     "ts-loader": "9.5.1",
     "ts-mocha": "10.0.0",
     "ts-node": "10.9.2",
-    "typescript": "5.4.2",
+    "typescript": "5.4.3",
     "webpack": "5.90.3",
     "webpack-bundle-analyzer": "4.10.1",
     "webpack-cli": "5.1.4",
