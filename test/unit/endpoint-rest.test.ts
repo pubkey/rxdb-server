@@ -21,23 +21,17 @@ import {
 } from '../../plugins/client-rest';
 import {
     schemaObjects,
-    schemas,
     nextPort,
     humansCollection,
-    ensureReplicationHasNoErrors,
-    isFastMode,
     HumanDocumentType
 } from 'rxdb/plugins/test-utils';
 import { assertThrows, wait, waitUntil } from 'async-test-util';
-import EventSource from 'eventsource';
 
 import config from './config.ts';
 import {
-    AuthType,
     authHandler,
     headers,
-    queryModifier,
-    urlSubPaths
+    queryModifier
 } from './test-helpers.ts';
 
 
