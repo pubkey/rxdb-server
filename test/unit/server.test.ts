@@ -6,7 +6,7 @@ import {
     overwritable
 } from 'rxdb/plugins/core';
 import {
-    startRxServer,
+    createRxServer,
     doesContainRegexQuerySelector,
     mergeServerDocumentFieldsMonad
 } from '../../plugins/server';
@@ -20,6 +20,7 @@ import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
 
 import config from './config.ts';
 import { authHandler } from './test-helpers.ts';
+import { RxServerAdapterExpress } from '../../plugins/adapter-express';
 
 
 /**
@@ -62,7 +63,8 @@ describe('server.test.ts', () => {
         it('should start end stop the server', async () => {
             const port = await nextPort();
             const col = await humansCollection.create(0);
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 authHandler,
                 port

@@ -45,13 +45,13 @@ export const REST_PATHS = [
 ] as const;
 
 
-export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoint<AuthType, RxDocType> {
+export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements RxServerEndpoint<AuthType, RxDocType> {
     readonly type = 'rest';
     readonly urlPath: string;
     readonly changeValidator: RxServerChangeValidator<AuthType, RxDocType>;
     readonly queryModifier: RxServerQueryModifier<AuthType, RxDocType>;
     constructor(
-        public readonly server: RxServer<AuthType>,
+        public readonly server: RxServer<ServerAppType, AuthType>,
         public readonly name: string,
         public readonly collection: RxCollection<RxDocType>,
         queryModifier: RxServerQueryModifier<AuthType, RxDocType>,
@@ -89,7 +89,8 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
         }
         const removeServerOnlyFields = removeServerOnlyFieldsMonad(this.serverOnlyFields);
 
-        this.server.expressApp.post('/' + this.urlPath + '/query', async (req, res) => {
+        this.server.adapter.post(this.server.serverApp, '/' + this.urlPath + '/query', async (req, res) => {
+            ensureNotFalsy(req.body, 'req body is empty');
             const authData = getFromMapOrThrow(authDataByRequest, req);
             let useQuery: FilledMangoQuery<RxDocType>
             try {
@@ -117,7 +118,7 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
          * so we send the query as query parameter in base64
          * like ?query=e3NlbGVjdG9yOiB7fX0=
          */
-        this.server.expressApp.get('/' + this.urlPath + '/query/observe', async (req, res) => {
+        this.server.adapter.get(this.server.serverApp, '/' + this.urlPath + '/query/observe', async (req, res) => {
             let authData = getFromMapOrThrow(authDataByRequest, req);
             writeSSEHeaders(res);
 
@@ -163,7 +164,7 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
         });
 
 
-        this.server.expressApp.post('/' + this.urlPath + '/get', async (req, res) => {
+        this.server.adapter.post(this.server.serverApp, '/' + this.urlPath + '/get', async (req, res) => {
             const authData = getFromMapOrThrow(authDataByRequest, req);
             const ids: string[] = req.body;
 
@@ -181,7 +182,7 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
             });
         });
 
-        this.server.expressApp.post('/' + this.urlPath + '/set', async (req, res) => {
+        this.server.adapter.post(this.server.serverApp, '/' + this.urlPath + '/set', async (req, res) => {
             const authData = getFromMapOrThrow(authDataByRequest, req);
             const docDataMatcherWrite = getDocAllowedMatcher(this, ensureNotFalsy(authData));
 
@@ -235,7 +236,7 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
             });
         });
 
-        this.server.expressApp.post('/' + this.urlPath + '/delete', async (req, res) => {
+        this.server.adapter.post(this.server.serverApp, '/' + this.urlPath + '/delete', async (req, res) => {
             const authData = getFromMapOrThrow(authDataByRequest, req);
             const docDataMatcherWrite = getDocAllowedMatcher(this, ensureNotFalsy(authData));
 

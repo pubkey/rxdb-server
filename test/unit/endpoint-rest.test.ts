@@ -9,9 +9,12 @@ import {
     randomCouchString
 } from 'rxdb/plugins/core';
 import {
+    RxServerAdapterExpress
+} from '../../plugins/adapter-express';
+import {
     type RxServerChangeValidator,
     type RxServerQueryModifier,
-    startRxServer
+    createRxServer
 } from '../../plugins/server';
 import {
     createRestClient
@@ -44,7 +47,8 @@ describe('endpoint-rest.test.ts', () => {
         it('should start end stop the server', async () => {
             const port = await nextPort();
             const col = await humansCollection.create(0);
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 authHandler,
                 port
@@ -53,12 +57,14 @@ describe('endpoint-rest.test.ts', () => {
                 name: randomCouchString(10),
                 collection: col
             });
+            await server.start();
             await col.database.destroy();
         });
         it('should work without auth handler', async () => {
             const port = await nextPort();
             const col = await humansCollection.create(0);
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 port
             });
@@ -66,6 +72,7 @@ describe('endpoint-rest.test.ts', () => {
                 name: randomCouchString(10),
                 collection: col
             });
+            await server.start();
             await col.database.destroy();
         });
     });
@@ -73,7 +80,8 @@ describe('endpoint-rest.test.ts', () => {
         it('should return the correct query results', async () => {
             const col = await humansCollection.create(5);
             const port = await nextPort();
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 authHandler,
                 port
@@ -82,9 +90,9 @@ describe('endpoint-rest.test.ts', () => {
                 name: randomCouchString(10),
                 collection: col
             });
+            await server.start();
 
             const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
-
 
             const response = await client.query({ selector: {} });
             assert.strictEqual(response.documents.length, 5);
@@ -102,7 +110,8 @@ describe('endpoint-rest.test.ts', () => {
             const col = await humansCollection.create(5);
             await col.insert(schemaObjects.humanData('only-matching', 1, headers.userid));
             const port = await nextPort();
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 authHandler,
                 port
@@ -112,6 +121,7 @@ describe('endpoint-rest.test.ts', () => {
                 collection: col,
                 queryModifier
             });
+            await server.start();
             const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
             const response = await client.query({ selector: {} });
             assert.strictEqual(response.documents.length, 1);
@@ -123,7 +133,8 @@ describe('endpoint-rest.test.ts', () => {
             const col = await humansCollection.create(5);
             await col.insert(schemaObjects.humanData('only-matching', 1, headers.userid));
             const port = await nextPort();
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 authHandler,
                 port
@@ -133,6 +144,7 @@ describe('endpoint-rest.test.ts', () => {
                 collection: col,
                 queryModifier
             });
+            await server.start();
             const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
 
             await assertThrows(
@@ -153,7 +165,8 @@ describe('endpoint-rest.test.ts', () => {
         it('should return the correct query results', async () => {
             const col = await humansCollection.create(5);
             const port = await nextPort();
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 authHandler,
                 port
@@ -162,6 +175,7 @@ describe('endpoint-rest.test.ts', () => {
                 name: randomCouchString(10),
                 collection: col
             });
+            await server.start();
 
             const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
 
@@ -183,7 +197,8 @@ describe('endpoint-rest.test.ts', () => {
         it('should should automatically reconnect', async () => {
             const col = await humansCollection.create(5);
             const port = await nextPort();
-            let server = await startRxServer({
+            let server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 authHandler,
                 port
@@ -192,6 +207,7 @@ describe('endpoint-rest.test.ts', () => {
                 name: randomCouchString(10),
                 collection: col
             });
+            await server.start();
 
             const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
 
@@ -202,7 +218,8 @@ describe('endpoint-rest.test.ts', () => {
             await server.close();
             await col.insert(schemaObjects.humanData('doc1', 1, headers.userid));
 
-            server = await startRxServer({
+            server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 authHandler,
                 port
@@ -211,6 +228,7 @@ describe('endpoint-rest.test.ts', () => {
                 name: randomCouchString(10),
                 collection: col
             });
+            await server.start();
 
             await waitUntil(() => emitted.length === 2);
 
@@ -223,7 +241,8 @@ describe('endpoint-rest.test.ts', () => {
             const col = await humansCollection.create(5);
             await col.insert(schemaObjects.humanData('only-matching', 1, headers.userid));
             const port = await nextPort();
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 authHandler,
                 port
@@ -233,6 +252,7 @@ describe('endpoint-rest.test.ts', () => {
                 collection: col,
                 queryModifier
             });
+            await server.start();
             const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
 
             const emitted: HumanDocumentType[][] = [];
@@ -252,7 +272,8 @@ describe('endpoint-rest.test.ts', () => {
             const docs = await col.find().exec();
             const ids = docs.map(d => d.passportId);
             const port = await nextPort();
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 authHandler,
                 port
@@ -261,6 +282,7 @@ describe('endpoint-rest.test.ts', () => {
                 name: randomCouchString(10),
                 collection: col
             });
+            await server.start();
             const client = createRestClient('http://localhost:' + port + '/' + endpoint.urlPath, headers);
 
             const response = await client.get(ids);
@@ -278,7 +300,8 @@ describe('endpoint-rest.test.ts', () => {
             const ids = docs.map(d => d.passportId);
 
             const port = await nextPort();
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 authHandler,
                 port
@@ -288,6 +311,7 @@ describe('endpoint-rest.test.ts', () => {
                 collection: col,
                 queryModifier
             });
+            await server.start();
             const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
             const response = await client.get(ids);
             assert.strictEqual(response.documents.length, 1);
@@ -301,7 +325,8 @@ describe('endpoint-rest.test.ts', () => {
             const col = await humansCollection.create(5);
             const docs = await col.find().exec();
             const port = await nextPort();
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 authHandler,
                 port
@@ -310,6 +335,7 @@ describe('endpoint-rest.test.ts', () => {
                 name: randomCouchString(10),
                 collection: col
             });
+            await server.start();
             const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
 
             const setDoc = docs[0].toMutableJSON();
@@ -325,7 +351,8 @@ describe('endpoint-rest.test.ts', () => {
             const col = await humansCollection.create(5);
             const docs = await col.find().exec();
             const port = await nextPort();
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 authHandler,
                 port
@@ -335,6 +362,7 @@ describe('endpoint-rest.test.ts', () => {
                 collection: col,
                 changeValidator: () => false
             });
+            await server.start();
             const client = createRestClient('http://localhost:' + port + '/' + endpoint.urlPath, headers);
 
             const ageBefore = docs[0].age;
@@ -358,7 +386,8 @@ describe('endpoint-rest.test.ts', () => {
             const docs = await col.find().exec();
             const ids = docs.map(d => d.passportId);
             const port = await nextPort();
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 authHandler,
                 port
@@ -367,6 +396,7 @@ describe('endpoint-rest.test.ts', () => {
                 name: randomCouchString(10),
                 collection: col
             });
+            await server.start();
             const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
 
 
@@ -382,10 +412,9 @@ describe('endpoint-rest.test.ts', () => {
             const docs = await col.find().exec();
             const ids = docs.map(d => d.passportId);
 
-
-
             const port = await nextPort();
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 authHandler,
                 port
@@ -395,6 +424,7 @@ describe('endpoint-rest.test.ts', () => {
                 collection: col,
                 queryModifier
             });
+            await server.start();
             const client = createRestClient('http://localhost:' + port + '/' + endpoint.urlPath, headers);
 
             await client.delete(ids);
@@ -417,7 +447,8 @@ describe('endpoint-rest.test.ts', () => {
             const docs = await col.find().exec();
             const ids = docs.map(d => d.passportId);
             const port = await nextPort();
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 authHandler,
                 port
@@ -427,6 +458,7 @@ describe('endpoint-rest.test.ts', () => {
                 collection: col,
                 changeValidator: () => false
             });
+            await server.start();
 
             const client = createRestClient('http://localhost:' + port + '/' + endpoint.urlPath, headers);
 
@@ -443,7 +475,8 @@ describe('endpoint-rest.test.ts', () => {
         it('should not return serverOnlyFields to /query requests', async () => {
             const col = await humansCollection.create(3);
             const port = await nextPort();
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 authHandler,
                 port
@@ -453,6 +486,7 @@ describe('endpoint-rest.test.ts', () => {
                 collection: col,
                 serverOnlyFields: ['lastName']
             });
+            await server.start();
             const client = createRestClient('http://localhost:' + port + '/' + endpoint.urlPath, headers);
 
             const response = await client.query({});
@@ -472,7 +506,8 @@ describe('endpoint-rest.test.ts', () => {
             const docs = await col.find().exec();
             const ids = docs.map(d => d.passportId);
             const port = await nextPort();
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 authHandler,
                 port
@@ -482,6 +517,7 @@ describe('endpoint-rest.test.ts', () => {
                 collection: col,
                 serverOnlyFields: ['lastName']
             });
+            await server.start();
             const client = createRestClient('http://localhost:' + port + '/' + endpoint.urlPath, headers);
             const response = await client.get(ids);
             response.documents.forEach((doc: any) => {
@@ -497,7 +533,8 @@ describe('endpoint-rest.test.ts', () => {
             const col = await humansCollection.create(1);
             const doc = await col.findOne().exec(true);
             const port = await nextPort();
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 authHandler,
                 port
@@ -507,6 +544,7 @@ describe('endpoint-rest.test.ts', () => {
                 collection: col,
                 serverOnlyFields: ['lastName']
             });
+            await server.start();
 
             const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
             const lastNameBefore = doc.lastName;

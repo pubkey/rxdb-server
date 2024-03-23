@@ -43,13 +43,13 @@ export type RxReplicationEndpointMessageType = {
     params: any[];
 };
 
-export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServerEndpoint<AuthType, RxDocType> {
+export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> implements RxServerEndpoint<AuthType, RxDocType> {
     readonly type = 'replication';
     readonly urlPath: string;
     readonly changeValidator: RxServerChangeValidator<AuthType, RxDocType>;
     readonly queryModifier: RxServerQueryModifier<AuthType, RxDocType>;
     constructor(
-        public readonly server: RxServer<AuthType>,
+        public readonly server: RxServer<ServerAppType, AuthType>,
         public readonly name: string,
         public readonly collection: RxCollection<RxDocType>,
         queryModifier: RxServerQueryModifier<AuthType, RxDocType>,
@@ -87,7 +87,7 @@ export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServe
         const removeServerOnlyFields = removeServerOnlyFieldsMonad<RxDocType>(this.serverOnlyFields);
         const mergeServerDocumentFields = mergeServerDocumentFieldsMonad<RxDocType>(this.serverOnlyFields);
 
-        this.server.expressApp.get('/' + this.urlPath + '/pull', async (req, res) => {
+        this.server.adapter.get(this.server.serverApp, '/' + this.urlPath + '/pull', async (req: any, res: any) => {
             const authData = getFromMapOrThrow(authDataByRequest, req);
             const id = req.query.id ? req.query.id as string : '';
             const lwt = req.query.lwt ? parseInt(req.query.lwt as any, 10) : 0;
@@ -98,7 +98,7 @@ export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServe
                 { id, lwt }
             );
             const useQueryChanges: FilledMangoQuery<RxDocType> = this.queryModifier(
-                ensureNotFalsy(authData),
+                ensureNotFalsy(authData as any),
                 plainQuery
             );
             const prepared = prepareQuery<RxDocType>(
@@ -118,9 +118,10 @@ export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServe
                 checkpoint: newCheckpoint
             });
         });
-        this.server.expressApp.post('/' + this.urlPath + '/push', async (req, res) => {
+
+        this.server.adapter.post(this.server.serverApp, '/' + this.urlPath + '/push', async (req: any, res: any) => {
             const authData = getFromMapOrThrow(authDataByRequest, req);
-            const docDataMatcherWrite = getDocAllowedMatcher(this, ensureNotFalsy(authData));
+            const docDataMatcherWrite = getDocAllowedMatcher(this, ensureNotFalsy(authData as any));
             const rows: RxReplicationWriteToMasterRow<RxDocType>[] = req.body;
             const ids: string[] = [];
             rows.forEach(row => ids.push((row.newDocumentState as any)[primaryPath]));
@@ -153,7 +154,7 @@ export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServe
 
             const useRows: typeof rows = rows.map((row) => {
                 const id = (row.newDocumentState as any)[primaryPath];
-                const isChangeValid = this.changeValidator(ensureNotFalsy(authData), {
+                const isChangeValid = this.changeValidator(ensureNotFalsy(authData as any), {
                     newDocumentState: removeServerOnlyFields(row.newDocumentState),
                     assumedMasterState: removeServerOnlyFields(row.assumedMasterState)
                 });
@@ -177,7 +178,7 @@ export class RxServerReplicationEndpoint<AuthType, RxDocType> implements RxServe
             res.setHeader('Content-Type', 'application/json');
             res.json(conflicts);
         });
-        this.server.expressApp.get('/' + this.urlPath + '/pullStream', async (req, res) => {
+        this.server.adapter.get(this.server.serverApp, '/' + this.urlPath + '/pullStream', async (req, res) => {
             writeSSEHeaders(res);
 
             const authData = getFromMapOrThrow(authDataByRequest, req);

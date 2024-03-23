@@ -9,8 +9,11 @@ import {
 import {
     type RxServerChangeValidator,
     type RxServerQueryModifier,
-    startRxServer
+    createRxServer
 } from '../../plugins/server';
+import {
+    RxServerAdapterExpress
+} from '../../plugins/adapter-express';
 import {
     replicateServer
 } from '../../plugins/replication-server';
@@ -29,6 +32,7 @@ import EventSource from 'eventsource';
 
 import config from './config.ts';
 import { AuthType, authHandler, headers, urlSubPaths } from './test-helpers.ts';
+import { HTTP_SERVER_BY_EXPRESS } from '../../plugins/adapter-express';
 
 
 describe('endpoint-replication.test.ts', () => {
@@ -37,7 +41,8 @@ describe('endpoint-replication.test.ts', () => {
         it('should be able to reach the endpoint', async function () {
             const col = await humansCollection.create(1);
             const port = await nextPort();
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 authHandler,
                 port
@@ -46,6 +51,7 @@ describe('endpoint-replication.test.ts', () => {
                 name: randomCouchString(10),
                 collection: col
             });
+            await server.start();
             const url = 'http://localhost:' + port + '/' + endpoint.urlPath + '/pull';
             const response = await fetch(url, {
                 headers
@@ -60,7 +66,8 @@ describe('endpoint-replication.test.ts', () => {
         it('should replicate all data in both directions', async function () {
             const col = await humansCollection.create(5);
             const port = await nextPort();
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 authHandler,
                 port
@@ -69,6 +76,7 @@ describe('endpoint-replication.test.ts', () => {
                 name: randomCouchString(10),
                 collection: col
             });
+            await server.start();
             const clientCol = await humansCollection.create(5);
             const url = 'http://localhost:' + port + '/' + endpoint.urlPath;
             const replicationState = await replicateServer({
@@ -95,7 +103,8 @@ describe('endpoint-replication.test.ts', () => {
         it('create read update delete', async () => {
             const serverCol = await humansCollection.create(0);
             const port = await nextPort();
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: serverCol.database,
                 authHandler,
                 port
@@ -104,6 +113,7 @@ describe('endpoint-replication.test.ts', () => {
                 name: randomCouchString(10),
                 collection: serverCol
             });
+            await server.start();
             const clientCol = await humansCollection.create(0);
             const url = 'http://localhost:' + port + '/' + endpoint.urlPath;
             const replicationState = await replicateServer({
@@ -151,7 +161,8 @@ describe('endpoint-replication.test.ts', () => {
             newestSchema.version = 1;
             const col = await humansCollection.createBySchema(newestSchema, undefined, undefined, { 1: d => d });
             const port = await nextPort();
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 authHandler,
                 port
@@ -160,6 +171,7 @@ describe('endpoint-replication.test.ts', () => {
                 name: randomCouchString(10),
                 collection: col
             });
+            await server.start();
 
             // check with plain requests
             for (const path of urlSubPaths) {
@@ -196,7 +208,8 @@ describe('endpoint-replication.test.ts', () => {
         it('must replicate ongoing changes', async () => {
             const col = await humansCollection.create(5);
             const port = await nextPort();
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 authHandler,
                 port
@@ -205,6 +218,8 @@ describe('endpoint-replication.test.ts', () => {
                 name: randomCouchString(10),
                 collection: col
             });
+            await server.start();
+
             const clientCol = await humansCollection.create(5);
             const url = 'http://localhost:' + port + '/' + endpoint.urlPath;
             const replicationState = await replicateServer({
@@ -234,7 +249,10 @@ describe('endpoint-replication.test.ts', () => {
             });
 
             // do not miss updates when connection is dropped
-            server.httpServer.closeAllConnections();
+            const httpServer = HTTP_SERVER_BY_EXPRESS.get(server.serverApp);
+            if (httpServer) {
+                await httpServer.closeAllConnections();
+            }
             await col.insert(schemaObjects.humanData());
             await waitUntil(async () => {
                 const docs = await clientCol.find().exec();
@@ -249,7 +267,8 @@ describe('endpoint-replication.test.ts', () => {
         it('should drop non authenticated clients', async () => {
             const col = await humansCollection.create(1);
             const port = await nextPort();
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 authHandler,
                 port
@@ -258,6 +277,7 @@ describe('endpoint-replication.test.ts', () => {
                 name: randomCouchString(10),
                 collection: col
             });
+            await server.start();
             const url = 'http://localhost:' + port + '/' + endpoint.urlPath;
 
             // check with plain requests
@@ -316,7 +336,8 @@ describe('endpoint-replication.test.ts', () => {
             const serverCol = await humansCollection.create(5);
             await serverCol.insert(schemaObjects.humanData('only-matching', 1, headers.userid));
             const port = await nextPort();
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: serverCol.database,
                 authHandler,
                 port
@@ -326,6 +347,7 @@ describe('endpoint-replication.test.ts', () => {
                 collection: serverCol,
                 queryModifier
             });
+            await server.start();
             const clientCol = await humansCollection.create(0);
             const url = 'http://localhost:' + port + '/' + endpoint.urlPath;
             const replicationState = await replicateServer({
@@ -367,7 +389,8 @@ describe('endpoint-replication.test.ts', () => {
         it('should only accept the matching documents on the server', async () => {
             const serverCol = await humansCollection.create(0);
             const port = await nextPort();
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: serverCol.database,
                 authHandler,
                 port
@@ -377,6 +400,8 @@ describe('endpoint-replication.test.ts', () => {
                 collection: serverCol,
                 queryModifier
             });
+            await server.start();
+
             const clientCol = await humansCollection.create(0);
             await clientCol.insert(schemaObjects.humanData('only-matching', 1, headers.userid));
             const url = 'http://localhost:' + port + '/' + endpoint.urlPath;
@@ -440,7 +465,8 @@ describe('endpoint-replication.test.ts', () => {
         it('should not accept non-allowed writes', async () => {
             const serverCol = await humansCollection.create(0);
             const port = await nextPort();
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: serverCol.database,
                 authHandler,
                 port
@@ -450,6 +476,8 @@ describe('endpoint-replication.test.ts', () => {
                 collection: serverCol,
                 changeValidator
             });
+            await server.start();
+
             const clientCol = await humansCollection.create(0);
             const url = 'http://localhost:' + port + '/' + endpoint.urlPath;
             const replicationState = await replicateServer({
@@ -495,7 +523,8 @@ describe('endpoint-replication.test.ts', () => {
         it('should not return serverOnlyFields to /pull requests', async () => {
             const col = await humansCollection.create(3);
             const port = await nextPort();
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 authHandler,
                 port
@@ -505,6 +534,8 @@ describe('endpoint-replication.test.ts', () => {
                 collection: col,
                 serverOnlyFields: ['lastName']
             });
+            await server.start();
+
             const url = 'http://localhost:' + port + '/' + endpoint.urlPath + '/pull';
             const response = await fetch(url, {
                 headers
@@ -524,7 +555,8 @@ describe('endpoint-replication.test.ts', () => {
         it('should not emit serverOnlyFields to /pullStream', async () => {
             const col = await humansCollection.create(3);
             const port = await nextPort();
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 authHandler,
                 port
@@ -534,6 +566,8 @@ describe('endpoint-replication.test.ts', () => {
                 collection: col,
                 serverOnlyFields: ['lastName']
             });
+            await server.start();
+
             const url = 'http://localhost:' + port + '/' + endpoint.urlPath + '/pullStream';
             const eventSource = new EventSource(url, { headers });
             const emitted: { documents: RxDocumentData<HumanDocumentType>[] }[] = [];
@@ -562,7 +596,8 @@ describe('endpoint-replication.test.ts', () => {
         it('should keep serverOnlyFields on writes', async () => {
             const col = await humansCollection.create(1);
             const port = await nextPort();
-            const server = await startRxServer({
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
                 database: col.database,
                 authHandler,
                 port
@@ -572,6 +607,8 @@ describe('endpoint-replication.test.ts', () => {
                 collection: col,
                 serverOnlyFields: ['lastName']
             });
+            await server.start();
+
             const clientCol = await humansCollection.createBySchema(humanDefault);
             const url = 'http://localhost:' + port + '/' + endpoint.urlPath;
             const replicationState = await replicateServer({

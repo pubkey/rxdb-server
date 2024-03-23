@@ -1,16 +1,14 @@
 import { RxServer } from './rx-server';
-import expressCors from 'cors';
 import type {
     Request,
     Response,
     NextFunction
 } from 'express';
-import { RxServerAuthData, RxServerEndpoint } from './types';
+import type { RxServerAuthData, RxServerEndpoint } from './types';
 import {
     FilledMangoQuery,
     MangoQuerySelector,
     RxDocumentData,
-    RxReplicationWriteToMasterRow,
     flatClone,
     getQueryMatcher,
     normalizeMangoQuery,
@@ -18,7 +16,7 @@ import {
 } from 'rxdb/plugins/core';
 
 export function setCors(
-    server: RxServer<any>,
+    server: RxServer<any, any>,
     path: string,
     cors?: string
 ) {
@@ -27,11 +25,7 @@ export function setCors(
         useCors = server.cors;
     }
     if (useCors) {
-        server.expressApp.options('/' + path + '/*', expressCors({
-            origin: useCors,
-            // some legacy browsers (IE11, various SmartTVs) choke on 204
-            optionsSuccessStatus: 200
-        }));
+        server.adapter.setCors(server.serverApp, path, useCors);
     }
 }
 
@@ -40,7 +34,7 @@ export function setCors(
  * the clients know they must update.
  */
 export function blockPreviousVersionPaths(
-    server: RxServer<any>,
+    server: RxServer<any, any>,
     path: string,
     currentVersion: number
 
@@ -48,7 +42,7 @@ export function blockPreviousVersionPaths(
     let v = 0;
     while (v < currentVersion) {
         const version = v;
-        server.expressApp.all('/' + path + '/' + version + '/*', (req, res) => {
+        server.adapter.all(server.serverApp, '/' + path + '/' + version + '/*', (req, res) => {
             closeConnection(res, 426, 'Outdated version ' + version + ' (newest is ' + currentVersion + ')');
         });
         v++;
@@ -70,11 +64,11 @@ export async function closeConnection(response: Response, code: number, message:
 
 
 export function addAuthMiddleware<AuthType>(
-    server: RxServer<AuthType>,
+    server: RxServer<any, AuthType>,
     path: string,
 ): WeakMap<Request, RxServerAuthData<AuthType>> {
     const authDataByRequest = new WeakMap<Request, RxServerAuthData<AuthType>>();
-    async function auth(req: Request, res: Response, next: NextFunction) {
+    async function auth(req: any, res: any, next: NextFunction) {
         try {
             const authData = await server.authHandler(req.headers);
             authDataByRequest.set(req, authData);
@@ -84,9 +78,7 @@ export function addAuthMiddleware<AuthType>(
             return;
         }
     }
-    server.expressApp.all('/' + path + '/*', auth, function (req, res, next) {
-        next();
-    });
+    server.adapter.all(server.serverApp, '/' + path + '/*', auth);
     return authDataByRequest;
 }
 
@@ -181,7 +173,7 @@ export function mergeServerDocumentFieldsMonad<RxDocType>(serverOnlyFields: stri
 
 
 /**
- * $regex queries are dangerous because they can dos-attach the 
+ * $regex queries are dangerous because they can dos-attack the server.
  * 
  * @param selector 
  */

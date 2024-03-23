@@ -4,33 +4,43 @@ import type {
 } from 'rxdb/plugins/core';
 import { RxServerReplicationEndpoint } from './endpoint-replication.ts';
 import type {
+    RxServerAdapter,
     RxServerAuthHandler,
     RxServerChangeValidator,
     RxServerEndpoint,
+    RxServerOptions,
     RxServerQueryModifier
 } from './types.ts';
-import {
-    Server as HttpServer
-} from 'http';
-import { Express } from 'express';
 import { RxServerRestEndpoint } from './endpoint-rest.ts';
 
-export class RxServer<AuthType> {
+export class RxServer<ServerAppType, AuthType> {
     public readonly endpoints: RxServerEndpoint<AuthType, any>[] = [];
 
     private closeFn = (() => this.close()).bind(this);
+    public listenPromise?: Promise<void>;
+
+    public readonly database: RxDatabase;
+    public readonly adapter: RxServerAdapter<ServerAppType>;
 
     constructor(
-        public readonly database: RxDatabase,
+        public readonly options: RxServerOptions<ServerAppType, AuthType>,
         public readonly authHandler: RxServerAuthHandler<AuthType>,
-        public readonly httpServer: HttpServer,
-        public readonly expressApp: Express,
+        public readonly serverApp: ServerAppType,
         public readonly cors: string = '*'
     ) {
-        database.onDestroy.push(this.closeFn);
+        this.database = options.database;
+        this.adapter = options.adapter;
+        options.database.onDestroy.push(this.closeFn);
     }
 
-    public async addReplicationEndpoint<RxDocType>(opts: {
+    private ensureNotStarted() {
+        if (this.listenPromise) {
+            throw new Error('This operation cannot be run after the RxServer has been started already');
+        }
+
+    }
+
+    public addReplicationEndpoint<RxDocType>(opts: {
         name: string,
         collection: RxCollection<RxDocType>,
         queryModifier?: RxServerQueryModifier<AuthType, RxDocType>,
@@ -43,6 +53,7 @@ export class RxServer<AuthType> {
         cors?: '*' | string,
         serverOnlyFields?: string[]
     }) {
+        this.ensureNotStarted();
         const endpoint = new RxServerReplicationEndpoint(
             this,
             opts.name,
@@ -56,7 +67,7 @@ export class RxServer<AuthType> {
         return endpoint;
     }
 
-    public async addRestEndpoint<RxDocType>(opts: {
+    public addRestEndpoint<RxDocType>(opts: {
         name: string,
         collection: RxCollection<RxDocType>,
         queryModifier?: RxServerQueryModifier<AuthType, RxDocType>,
@@ -69,6 +80,7 @@ export class RxServer<AuthType> {
         cors?: '*' | string,
         serverOnlyFields?: string[]
     }) {
+        this.ensureNotStarted();
         const endpoint = new RxServerRestEndpoint(
             this,
             opts.name,
@@ -82,19 +94,18 @@ export class RxServer<AuthType> {
         return endpoint;
     }
 
+    async start() {
+        this.ensureNotStarted();
+        const hostname = this.options.hostname ? this.options.hostname : 'localhost';
+        this.listenPromise = this.options.adapter.listen(this.serverApp, this.options.port, hostname);
+        return this.listenPromise;
+    }
+
     async close() {
         this.database.onDestroy = this.database.onDestroy.filter(fn => fn !== this.closeFn);
-        await new Promise<void>((res, rej) => {
-            this.httpServer.close((err) => {
-                if (err) { rej(err); } else { res(); }
-            });
-            /**
-             * By default it will await all ongoing connections
-             * before it closes. So we have to close it directly.
-             * @link https://stackoverflow.com/a/36830072/3443137
-             */
-            setImmediate(() => this.httpServer.emit('close'));
-        });
-
+        if (this.listenPromise) {
+            await this.listenPromise;
+            await this.options.adapter.close(this.serverApp);
+        }
     }
 }

@@ -33,6 +33,12 @@
       "import": "./dist/esm/plugins/server/index.js",
       "default": "./dist/esm/plugins/server/index.js"
     },
+    "./plugins/adapter-express": {
+      "types": "./dist/types/plugins/adapter-express/index.d.ts",
+      "require": "./dist/cjs/plugins/adapter-express/index.js",
+      "import": "./dist/esm/plugins/adapter-express/index.js",
+      "default": "./dist/esm/plugins/adapter-express/index.js"
+    },
     "./plugins/replication-server": {
       "types": "./dist/types/plugins/replication-server/index.d.ts",
       "require": "./dist/cjs/plugins/replication-server/index.js",
