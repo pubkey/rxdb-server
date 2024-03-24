@@ -20,8 +20,7 @@ import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
 
 import config from './config.ts';
 import { authHandler } from './test-helpers.ts';
-import { RxServerAdapterExpress } from '../../plugins/adapter-express';
-
+import { TEST_SERVER_ADAPTER } from './config-server.test.ts';
 
 /**
  * exit with non-zero on unhandledRejection
@@ -64,7 +63,7 @@ describe('server.test.ts', () => {
             const port = await nextPort();
             const col = await humansCollection.create(0);
             const server = await createRxServer({
-                adapter: RxServerAdapterExpress,
+                adapter: TEST_SERVER_ADAPTER,
                 database: col.database,
                 authHandler,
                 port
