@@ -48,8 +48,8 @@ jobs:
 
       - name: add git tag
         run: |
-          git tag ${{github.event.inputs.version}}
-          git push origin ${{github.event.inputs.version}}
+          git tag ${{steps.vars.outputs.version}}
+          git push origin ${{steps.vars.outputs.versionn}}
 
       # - name: Push tag
       #   uses: actions-ecosystem/action-push-tag@v1
