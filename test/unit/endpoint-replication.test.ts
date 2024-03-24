@@ -93,6 +93,7 @@ describe('endpoint-replication.test.ts', () => {
             const docsA = await col.find().exec();
             assert.strictEqual(docsA.length, 10);
 
+            await replicationState.cancel();
             await col.database.destroy();
             await clientCol.database.destroy();
         });

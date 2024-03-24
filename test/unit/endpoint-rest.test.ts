@@ -195,8 +195,9 @@ describe('endpoint-rest.test.ts', () => {
                 authHandler,
                 port
             });
+            const endpointName = randomCouchString(10);
             const endpoint = await server.addRestEndpoint({
-                name: randomCouchString(10),
+                name: endpointName,
                 collection: col
             });
             await server.start();
@@ -217,7 +218,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             await server.addRestEndpoint({
-                name: randomCouchString(10),
+                name: endpointName,
                 collection: col
             });
             await server.start();

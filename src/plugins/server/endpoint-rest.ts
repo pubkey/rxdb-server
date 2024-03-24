@@ -158,7 +158,7 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
              */
             adapter.onRequestClose(req, () => {
                 subscription.unsubscribe();
-                adapter.endResponse(req);
+                adapter.endResponse(res);
             });
         });
 
