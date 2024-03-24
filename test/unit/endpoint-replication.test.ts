@@ -199,6 +199,7 @@ describe('endpoint-replication.test.ts', () => {
             const firstError = errors[0];
             assert.strictEqual(firstError.code, 'RC_PULL');
 
+            await replicationState.cancel();
             col.database.destroy();
             clientCol.database.destroy();
         });
@@ -254,6 +255,7 @@ describe('endpoint-replication.test.ts', () => {
                 return docs.length === 13;
             });
 
+            await replicationState.cancel();
             col.database.destroy();
             clientCol.database.destroy();
         });
@@ -320,6 +322,7 @@ describe('endpoint-replication.test.ts', () => {
                 return docs.length === 4;
             });
 
+            await replicationState.cancel();
             col.database.destroy();
             clientCol.database.destroy();
         });
@@ -380,6 +383,7 @@ describe('endpoint-replication.test.ts', () => {
                 return docs.length === 3;
             });
 
+            await replicationState.cancel();
             serverCol.database.destroy();
             clientCol.database.destroy();
         });
@@ -445,6 +449,7 @@ describe('endpoint-replication.test.ts', () => {
 
             await waitUntil(() => forbiddenEmitted === true);
 
+            await replicationState.cancel();
             serverCol.database.destroy();
             clientCol.database.destroy();
         });
@@ -512,6 +517,7 @@ describe('endpoint-replication.test.ts', () => {
             const serverDocAfter = await serverCol.findOne().exec(true);
             assert.strictEqual(serverDocAfter.firstName, headers.userid);
 
+            await replicationState.cancel();
             serverCol.database.destroy();
             clientCol.database.destroy();
         });
@@ -631,6 +637,7 @@ describe('endpoint-replication.test.ts', () => {
             assert.strictEqual(serverDoc.firstName, 'foobar');
             assert.strictEqual(serverDoc.lastName, lastNameBefore);
 
+            await replicationState.cancel();
             await col.database.destroy();
         });
     });
