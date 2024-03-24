@@ -19,13 +19,11 @@ import {
 import {
     addAuthMiddleware,
     blockPreviousVersionPaths,
-    closeConnection,
     docContainsServerOnlyFields,
     doesContainRegexQuerySelector,
     getDocAllowedMatcher,
     removeServerOnlyFieldsMonad,
-    setCors,
-    writeSSEHeaders
+    setCors
 } from './helper.ts';
 
 
@@ -45,13 +43,13 @@ export const REST_PATHS = [
 ] as const;
 
 
-export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoint<AuthType, RxDocType> {
+export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements RxServerEndpoint<AuthType, RxDocType> {
     readonly type = 'rest';
     readonly urlPath: string;
     readonly changeValidator: RxServerChangeValidator<AuthType, RxDocType>;
     readonly queryModifier: RxServerQueryModifier<AuthType, RxDocType>;
     constructor(
-        public readonly server: RxServer<AuthType>,
+        public readonly server: RxServer<ServerAppType, AuthType>,
         public readonly name: string,
         public readonly collection: RxCollection<RxDocType>,
         queryModifier: RxServerQueryModifier<AuthType, RxDocType>,
@@ -59,6 +57,7 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
         public readonly serverOnlyFields: string[],
         public readonly cors?: string
     ) {
+        const adapter = server.adapter;
         setCors(this.server, [this.name].join('/'), cors);
         blockPreviousVersionPaths(this.server, [this.name].join('/'), collection.schema.version);
 
@@ -89,7 +88,8 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
         }
         const removeServerOnlyFields = removeServerOnlyFieldsMonad(this.serverOnlyFields);
 
-        this.server.expressApp.post('/' + this.urlPath + '/query', async (req, res) => {
+        this.server.adapter.post(this.server.serverApp, '/' + this.urlPath + '/query', async (req, res) => {
+            ensureNotFalsy(adapter.getRequestBody(req), 'req body is empty');
             const authData = getFromMapOrThrow(authDataByRequest, req);
             let useQuery: FilledMangoQuery<RxDocType>
             try {
@@ -97,17 +97,17 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
                     ensureNotFalsy(authData),
                     normalizeMangoQuery(
                         this.collection.schema.jsonSchema,
-                        req.body
+                        adapter.getRequestBody(req)
                     )
                 );
             } catch (err) {
-                closeConnection(res, 400, 'Bad Request');
+                adapter.closeConnection(res, 400, 'Bad Request');
                 return;
             }
             const rxQuery = this.collection.find(useQuery as any);
             const result = await rxQuery.exec();
-            res.setHeader('Content-Type', 'application/json');
-            res.json({
+            adapter.setResponseHeader(res, 'Content-Type', 'application/json');
+            adapter.endResponseJson(res, {
                 documents: result.map(d => removeServerOnlyFields(d.toJSON()))
             });
         });
@@ -117,15 +117,15 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
          * so we send the query as query parameter in base64
          * like ?query=e3NlbGVjdG9yOiB7fX0=
          */
-        this.server.expressApp.get('/' + this.urlPath + '/query/observe', async (req, res) => {
+        this.server.adapter.get(this.server.serverApp, '/' + this.urlPath + '/query/observe', async (req, res) => {
             let authData = getFromMapOrThrow(authDataByRequest, req);
-            writeSSEHeaders(res);
+            adapter.setSSEHeaders(res);
 
             const useQuery: FilledMangoQuery<RxDocType> = this.queryModifier(
                 ensureNotFalsy(authData),
                 normalizeMangoQuery(
                     this.collection.schema.jsonSchema,
-                    JSON.parse(atob(req.query.query as string))
+                    JSON.parse(atob(adapter.getRequestQuery(req).query as string))
                 )
             );
 
@@ -140,9 +140,9 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
                      * before emitting the new results.
                      */
                     try {
-                        authData = await server.authHandler(req.headers);
+                        authData = await server.authHandler(adapter.getRequestHeaders(req));
                     } catch (err) {
-                        closeConnection(res, 401, 'Unauthorized');
+                        adapter.closeConnection(res, 401, 'Unauthorized');
                         return null;
                     }
 
@@ -150,22 +150,22 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
                 }),
                 filter(f => f !== null)
             ).subscribe(resultData => {
-                res.write('data: ' + JSON.stringify(resultData) + '\n\n');
+                adapter.responseWrite(res, 'data: ' + JSON.stringify(resultData) + '\n\n');
             });
 
             /**
              * @link https://youtu.be/0PcMuYGJPzM?si=AxkczxcMaUwhh8k9&t=363
              */
-            req.on('close', () => {
+            adapter.onRequestClose(req, () => {
                 subscription.unsubscribe();
-                res.end();
+                adapter.endResponse(req);
             });
         });
 
 
-        this.server.expressApp.post('/' + this.urlPath + '/get', async (req, res) => {
+        this.server.adapter.post(this.server.serverApp, '/' + this.urlPath + '/get', async (req, res) => {
             const authData = getFromMapOrThrow(authDataByRequest, req);
-            const ids: string[] = req.body;
+            const ids: string[] = adapter.getRequestBody(req);
 
             const rxQuery = this.collection.findByIds(ids);
             const resultMap = await rxQuery.exec();
@@ -175,22 +175,22 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
             useDocs = useDocs.filter(d => docMatcher(d as any));
             useDocs = useDocs.map(d => removeServerOnlyFields(d))
 
-            res.setHeader('Content-Type', 'application/json');
-            res.json({
+            adapter.setResponseHeader(res, 'Content-Type', 'application/json');
+            adapter.endResponseJson(res, {
                 documents: useDocs
             });
         });
 
-        this.server.expressApp.post('/' + this.urlPath + '/set', async (req, res) => {
+        this.server.adapter.post(this.server.serverApp, '/' + this.urlPath + '/set', async (req, res) => {
             const authData = getFromMapOrThrow(authDataByRequest, req);
             const docDataMatcherWrite = getDocAllowedMatcher(this, ensureNotFalsy(authData));
 
-            let docsData: RxDocType[] = req.body;
+            let docsData: RxDocType[] = adapter.getRequestBody(req);
 
             for (const docData of docsData) {
                 const allowed = docDataMatcherWrite(docData as any);
                 if (!allowed) {
-                    closeConnection(res, 403, 'Forbidden');
+                    adapter.closeConnection(res, 403, 'Forbidden');
                     return;
                 }
             }
@@ -200,7 +200,7 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
                     // just retry on conflicts
                     docsData.push(docData);
                 } else {
-                    closeConnection(res, 500, 'Internal Server Error');
+                    adapter.closeConnection(res, 500, 'Internal Server Error');
                     throw err;
                 }
             }
@@ -221,7 +221,7 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
                             assumedMasterState: removeServerOnlyFields(doc.toJSON(true))
                         });
                         if (!isAllowed) {
-                            closeConnection(res, 403, 'Forbidden');
+                            adapter.closeConnection(res, 403, 'Forbidden');
                             return;
                         }
                         promises.push(doc.patch(docData).catch(err => onWriteError(err, docData)));
@@ -230,16 +230,15 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
                 await Promise.all(promises);
             }
 
-            res.setHeader('Content-Type', 'application/json');
-            res.json({
-            });
+            adapter.setResponseHeader(res, 'Content-Type', 'application/json')
+            adapter.endResponseJson(res, {});
         });
 
-        this.server.expressApp.post('/' + this.urlPath + '/delete', async (req, res) => {
+        this.server.adapter.post(this.server.serverApp, '/' + this.urlPath + '/delete', async (req, res) => {
             const authData = getFromMapOrThrow(authDataByRequest, req);
             const docDataMatcherWrite = getDocAllowedMatcher(this, ensureNotFalsy(authData));
 
-            let ids: string[] = req.body;
+            let ids: string[] = adapter.getRequestBody(req);
             while (ids.length > 0) {
                 const useIds = ids.slice(0);
                 ids = [];
@@ -250,7 +249,7 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
                     if (doc) {
                         const isAllowedDoc = docDataMatcherWrite(doc.toJSON(true) as any);
                         if (!isAllowedDoc) {
-                            closeConnection(res, 403, 'Forbidden');
+                            adapter.closeConnection(res, 403, 'Forbidden');
                             return;
                         }
 
@@ -259,7 +258,7 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
                             assumedMasterState: doc.toJSON(true) as any
                         });
                         if (!isAllowedChange) {
-                            closeConnection(res, 403, 'Forbidden');
+                            adapter.closeConnection(res, 403, 'Forbidden');
                             return;
                         }
 
@@ -268,7 +267,7 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
                                 // just retry on conflicts
                                 ids.push(id);
                             } else {
-                                closeConnection(res, 500, 'Internal Server Error');
+                                adapter.closeConnection(res, 500, 'Internal Server Error');
                                 throw err;
                             }
                         }));
@@ -276,8 +275,8 @@ export class RxServerRestEndpoint<AuthType, RxDocType> implements RxServerEndpoi
                 }
                 await Promise.all(promises);
             }
-            res.setHeader('Content-Type', 'application/json');
-            res.json({});
+            adapter.setResponseHeader(res, 'Content-Type', 'application/json');
+            adapter.endResponseJson(res, {});
         });
     }
 }

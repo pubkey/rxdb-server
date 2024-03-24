@@ -3,16 +3,15 @@ import type {
     RxDatabase,
     RxReplicationWriteToMasterRow,
     MaybePromise,
-    RxCollection,
-    WithDeleted
+    RxCollection
 } from 'rxdb/plugins/core';
 import { IncomingHttpHeaders } from 'http';
-import { Express } from 'express';
 
-export type RxServerOptions<AuthType> = {
+export type RxServerOptions<ServerAppType, AuthType> = {
     database: RxDatabase;
+    adapter: RxServerAdapter<ServerAppType, any, any>;
+    serverApp?: ServerAppType;
     authHandler?: RxServerAuthHandler<AuthType>;
-    serverApp?: Express;
     appOptions?: any;
     /**
      * [default=localhost]
@@ -25,6 +24,36 @@ export type RxServerOptions<AuthType> = {
      * [default='*']
      */
     cors?: '*' | string;
+};
+
+
+export type RxServerRouteHandler<RequestType = any, ResponseType = any> = (req: RequestType, res: ResponseType, next?: any) => MaybePromise<void>;
+
+export type RxServerAdapter<ServerAppType, RequestType = any, ResponseType = any> = {
+    create(): Promise<ServerAppType>;
+
+    get(app: ServerAppType, path: string, handler: RxServerRouteHandler<RequestType, ResponseType>): void;
+    post(app: ServerAppType, path: string, handler: RxServerRouteHandler<RequestType, ResponseType>): void;
+    all(app: ServerAppType, path: string, handler: RxServerRouteHandler<RequestType, ResponseType>): void;
+
+    setCors(app: ServerAppType, path: string, cors: string): void;
+
+    getRequestBody(req: RequestType): any;
+    getRequestHeaders(req: RequestType): { [k: string]: string };
+    getRequestQuery(req: RequestType): any;
+    onRequestClose(req: RequestType, handler: () => void): void;
+
+    setResponseHeader(res: ResponseType, name: string, value: string): void;
+    endResponseJson(res: ResponseType, data: any): void;
+    endResponse(res: ResponseType): void;
+    responseWrite(res: ResponseType, data: string): void;
+    setSSEHeaders(res: ResponseType): void;
+    closeConnection(res: ResponseType, code: number, message: string): void;
+
+    listen(app: ServerAppType, port: number, hostname: string): Promise<void>;
+    closeAllConnections(app: ServerAppType): MaybePromise<any>;
+    close(app: ServerAppType): Promise<void>;
+
 };
 
 export type RxServerAuthData<AuthType> = {
