@@ -2,7 +2,6 @@ import assert from 'assert';
 
 import {
     RxDocumentData,
-    addRxPlugin,
     clone,
     randomCouchString
 } from 'rxdb/plugins/core';
@@ -11,9 +10,6 @@ import {
     type RxServerQueryModifier,
     createRxServer
 } from '../../plugins/server';
-import {
-    RxServerAdapterExpress
-} from '../../plugins/adapter-express';
 import {
     replicateServer
 } from '../../plugins/replication-server';
@@ -32,7 +28,7 @@ import EventSource from 'eventsource';
 
 import config from './config.ts';
 import { AuthType, authHandler, headers, urlSubPaths } from './test-helpers.ts';
-import { HTTP_SERVER_BY_EXPRESS } from '../../plugins/adapter-express';
+import { TEST_SERVER_ADAPTER } from './config-server.ts';
 
 
 describe('endpoint-replication.test.ts', () => {
@@ -42,7 +38,7 @@ describe('endpoint-replication.test.ts', () => {
             const col = await humansCollection.create(1);
             const port = await nextPort();
             const server = await createRxServer({
-                adapter: RxServerAdapterExpress,
+                adapter: TEST_SERVER_ADAPTER,
                 database: col.database,
                 authHandler,
                 port
@@ -67,7 +63,7 @@ describe('endpoint-replication.test.ts', () => {
             const col = await humansCollection.create(5);
             const port = await nextPort();
             const server = await createRxServer({
-                adapter: RxServerAdapterExpress,
+                adapter: TEST_SERVER_ADAPTER,
                 database: col.database,
                 authHandler,
                 port
@@ -104,7 +100,7 @@ describe('endpoint-replication.test.ts', () => {
             const serverCol = await humansCollection.create(0);
             const port = await nextPort();
             const server = await createRxServer({
-                adapter: RxServerAdapterExpress,
+                adapter: TEST_SERVER_ADAPTER,
                 database: serverCol.database,
                 authHandler,
                 port
@@ -162,7 +158,7 @@ describe('endpoint-replication.test.ts', () => {
             const col = await humansCollection.createBySchema(newestSchema, undefined, undefined, { 1: d => d });
             const port = await nextPort();
             const server = await createRxServer({
-                adapter: RxServerAdapterExpress,
+                adapter: TEST_SERVER_ADAPTER,
                 database: col.database,
                 authHandler,
                 port
@@ -209,7 +205,7 @@ describe('endpoint-replication.test.ts', () => {
             const col = await humansCollection.create(5);
             const port = await nextPort();
             const server = await createRxServer({
-                adapter: RxServerAdapterExpress,
+                adapter: TEST_SERVER_ADAPTER,
                 database: col.database,
                 authHandler,
                 port
@@ -249,10 +245,8 @@ describe('endpoint-replication.test.ts', () => {
             });
 
             // do not miss updates when connection is dropped
-            const httpServer = HTTP_SERVER_BY_EXPRESS.get(server.serverApp);
-            if (httpServer) {
-                await httpServer.closeAllConnections();
-            }
+            await server.adapter.closeAllConnections(server.serverApp);
+
             await col.insert(schemaObjects.humanData());
             await waitUntil(async () => {
                 const docs = await clientCol.find().exec();
@@ -268,7 +262,7 @@ describe('endpoint-replication.test.ts', () => {
             const col = await humansCollection.create(1);
             const port = await nextPort();
             const server = await createRxServer({
-                adapter: RxServerAdapterExpress,
+                adapter: TEST_SERVER_ADAPTER,
                 database: col.database,
                 authHandler,
                 port
@@ -337,7 +331,7 @@ describe('endpoint-replication.test.ts', () => {
             await serverCol.insert(schemaObjects.humanData('only-matching', 1, headers.userid));
             const port = await nextPort();
             const server = await createRxServer({
-                adapter: RxServerAdapterExpress,
+                adapter: TEST_SERVER_ADAPTER,
                 database: serverCol.database,
                 authHandler,
                 port
@@ -390,7 +384,7 @@ describe('endpoint-replication.test.ts', () => {
             const serverCol = await humansCollection.create(0);
             const port = await nextPort();
             const server = await createRxServer({
-                adapter: RxServerAdapterExpress,
+                adapter: TEST_SERVER_ADAPTER,
                 database: serverCol.database,
                 authHandler,
                 port
@@ -466,7 +460,7 @@ describe('endpoint-replication.test.ts', () => {
             const serverCol = await humansCollection.create(0);
             const port = await nextPort();
             const server = await createRxServer({
-                adapter: RxServerAdapterExpress,
+                adapter: TEST_SERVER_ADAPTER,
                 database: serverCol.database,
                 authHandler,
                 port
@@ -524,7 +518,7 @@ describe('endpoint-replication.test.ts', () => {
             const col = await humansCollection.create(3);
             const port = await nextPort();
             const server = await createRxServer({
-                adapter: RxServerAdapterExpress,
+                adapter: TEST_SERVER_ADAPTER,
                 database: col.database,
                 authHandler,
                 port
@@ -556,7 +550,7 @@ describe('endpoint-replication.test.ts', () => {
             const col = await humansCollection.create(3);
             const port = await nextPort();
             const server = await createRxServer({
-                adapter: RxServerAdapterExpress,
+                adapter: TEST_SERVER_ADAPTER,
                 database: col.database,
                 authHandler,
                 port
@@ -597,7 +591,7 @@ describe('endpoint-replication.test.ts', () => {
             const col = await humansCollection.create(1);
             const port = await nextPort();
             const server = await createRxServer({
-                adapter: RxServerAdapterExpress,
+                adapter: TEST_SERVER_ADAPTER,
                 database: col.database,
                 authHandler,
                 port

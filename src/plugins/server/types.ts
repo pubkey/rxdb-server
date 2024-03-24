@@ -38,7 +38,20 @@ export type RxServerAdapter<ServerAppType, RequestType = any, ResponseType = any
 
     setCors(app: ServerAppType, path: string, cors: string): void;
 
+    getRequestBody(req: RequestType): any;
+    getRequestHeaders(req: RequestType): { [k: string]: string };
+    getRequestQuery(req: RequestType): any;
+    onRequestClose(req: RequestType, handler: () => void): void;
+
+    setResponseHeader(res: ResponseType, name: string, value: string): void;
+    endResponseJson(res: ResponseType, data: any): void;
+    endResponse(res: ResponseType): void;
+    responseWrite(res: ResponseType, data: string): void;
+    setSSEHeaders(res: ResponseType): void;
+    closeConnection(res: ResponseType, code: number, message: string): void;
+
     listen(app: ServerAppType, port: number, hostname: string): Promise<void>;
+    closeAllConnections(app: ServerAppType): MaybePromise<any>;
     close(app: ServerAppType): Promise<void>;
 
 };

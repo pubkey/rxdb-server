@@ -4,7 +4,7 @@ import type {
     Response,
     NextFunction
 } from 'express';
-import type { RxServerAuthData, RxServerEndpoint } from './types';
+import type { RxServerAdapter, RxServerAuthData, RxServerEndpoint } from './types';
 import {
     FilledMangoQuery,
     MangoQuerySelector,
@@ -43,23 +43,10 @@ export function blockPreviousVersionPaths(
     while (v < currentVersion) {
         const version = v;
         server.adapter.all(server.serverApp, '/' + path + '/' + version + '/*', (req, res) => {
-            closeConnection(res, 426, 'Outdated version ' + version + ' (newest is ' + currentVersion + ')');
+            server.adapter.closeConnection(res, 426, 'Outdated version ' + version + ' (newest is ' + currentVersion + ')');
         });
         v++;
     }
-}
-
-
-export async function closeConnection(response: Response, code: number, message: string) {
-    const responseWrite = {
-        code,
-        error: true,
-        message
-    };
-    response.statusCode = code;
-    response.set("Connection", "close");
-    await response.write(JSON.stringify(responseWrite));
-    response.end();
 }
 
 
@@ -74,7 +61,7 @@ export function addAuthMiddleware<AuthType>(
             authDataByRequest.set(req, authData);
             next();
         } catch (err) {
-            closeConnection(res, 401, 'Unauthorized');
+            server.adapter.closeConnection(res, 401, 'Unauthorized');
             return;
         }
     }
@@ -103,24 +90,6 @@ export function getDocAllowedMatcher<RxDocType, AuthType>(
     return docDataMatcher;
 }
 
-export function writeSSEHeaders(res: Response) {
-    res.writeHead(200, {
-        /**
-         * Use exact these headers to make is less likely
-         * for people to have problems.
-         * @link https://www.youtube.com/watch?v=0PcMuYGJPzM
-         */
-        'Content-Type': 'text/event-stream; charset=utf-8',
-        'Connection': 'keep-alive',
-        'Cache-Control': 'no-cache',
-        /**
-         * Required for nginx
-         * @link https://stackoverflow.com/q/61029079/3443137
-         */
-        'X-Accel-Buffering': 'no'
-    });
-    res.flushHeaders();
-}
 
 export function docContainsServerOnlyFields(
     serverOnlyFields: string[],
