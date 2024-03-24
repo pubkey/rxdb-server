@@ -25,10 +25,10 @@ import {
 } from 'rxdb/plugins/utils';
 
 import {
-    addAuthMiddleware,
     blockPreviousVersionPaths,
     docContainsServerOnlyFields,
     doesContainRegexQuerySelector,
+    getAuthDataByRequest,
     getDocAllowedMatcher,
     mergeServerDocumentFieldsMonad,
     removeServerOnlyFieldsMonad,
@@ -64,11 +64,6 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
 
         const primaryPath = this.collection.schema.primaryPath;
         const replicationHandler = getReplicationHandlerByCollection(this.server.database, collection.name);
-        const authDataByRequest = addAuthMiddleware(
-            this.server,
-            this.urlPath
-        );
-
         this.queryModifier = (authData, query) => {
             if (doesContainRegexQuerySelector(query.selector)) {
                 throw new Error('$regex queries not allowed because of DOS-attacks');
@@ -88,7 +83,8 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
         const mergeServerDocumentFields = mergeServerDocumentFieldsMonad<RxDocType>(this.serverOnlyFields);
 
         this.server.adapter.get(this.server.serverApp, '/' + this.urlPath + '/pull', async (req: any, res: any) => {
-            const authData = getFromMapOrThrow(authDataByRequest, req);
+            const authData = await getAuthDataByRequest(this.server, req, res);
+            if (!authData) { return; }
 
             const urlQuery = adapter.getRequestQuery(req);
             const id = urlQuery.id ? urlQuery.id as string : '';
@@ -100,7 +96,7 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
                 { id, lwt }
             );
             const useQueryChanges: FilledMangoQuery<RxDocType> = this.queryModifier(
-                ensureNotFalsy(authData as any),
+                ensureNotFalsy(authData),
                 plainQuery
             );
             const prepared = prepareQuery<RxDocType>(
@@ -122,7 +118,9 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
         });
 
         this.server.adapter.post(this.server.serverApp, '/' + this.urlPath + '/push', async (req: any, res: any) => {
-            const authData = getFromMapOrThrow(authDataByRequest, req);
+            const authData = await getAuthDataByRequest(this.server, req, res);
+            if (!authData) { return; }
+
             const docDataMatcherWrite = getDocAllowedMatcher(this, ensureNotFalsy(authData as any));
             const rows: RxReplicationWriteToMasterRow<RxDocType>[] = adapter.getRequestBody(req);
             const ids: string[] = [];
@@ -156,7 +154,7 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
 
             const useRows: typeof rows = rows.map((row) => {
                 const id = (row.newDocumentState as any)[primaryPath];
-                const isChangeValid = this.changeValidator(ensureNotFalsy(authData as any), {
+                const isChangeValid = this.changeValidator(ensureNotFalsy(authData), {
                     newDocumentState: removeServerOnlyFields(row.newDocumentState),
                     assumedMasterState: removeServerOnlyFields(row.assumedMasterState)
                 });
@@ -181,9 +179,11 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
             adapter.endResponseJson(res, conflicts);
         });
         this.server.adapter.get(this.server.serverApp, '/' + this.urlPath + '/pullStream', async (req, res) => {
+            
+            const authData = await getAuthDataByRequest<AuthType, any, any>(this.server, req, res);
+            if (!authData) { return; }
+            
             adapter.setSSEHeaders(res);
-
-            const authData = getFromMapOrThrow(authDataByRequest, req);
             const docDataMatcherStream = getDocAllowedMatcher(this, ensureNotFalsy(authData));
             const subscription = replicationHandler.masterChangeStream$.pipe(
                 mergeMap(async (changes) => {

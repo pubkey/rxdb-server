@@ -17,10 +17,10 @@ import {
 } from 'rxdb/plugins/utils';
 
 import {
-    addAuthMiddleware,
     blockPreviousVersionPaths,
     docContainsServerOnlyFields,
     doesContainRegexQuerySelector,
+    getAuthDataByRequest,
     getDocAllowedMatcher,
     removeServerOnlyFieldsMonad,
     setCors
@@ -63,10 +63,6 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
 
         this.urlPath = [this.name, collection.schema.version].join('/');
         const primaryPath = this.collection.schema.primaryPath;
-        const authDataByRequest = addAuthMiddleware(
-            this.server,
-            this.urlPath
-        );
 
         this.queryModifier = (authData, query) => {
             if (doesContainRegexQuerySelector(query.selector)) {
@@ -90,7 +86,9 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
 
         this.server.adapter.post(this.server.serverApp, '/' + this.urlPath + '/query', async (req, res) => {
             ensureNotFalsy(adapter.getRequestBody(req), 'req body is empty');
-            const authData = getFromMapOrThrow(authDataByRequest, req);
+            const authData = await getAuthDataByRequest(this.server, req, res);
+            if (!authData) { return; }
+
             let useQuery: FilledMangoQuery<RxDocType>
             try {
                 useQuery = this.queryModifier(
@@ -118,7 +116,9 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
          * like ?query=e3NlbGVjdG9yOiB7fX0=
          */
         this.server.adapter.get(this.server.serverApp, '/' + this.urlPath + '/query/observe', async (req, res) => {
-            let authData = getFromMapOrThrow(authDataByRequest, req);
+            let authData = await getAuthDataByRequest(this.server, req, res);
+            if (!authData) { return; }
+
             adapter.setSSEHeaders(res);
 
             const useQuery: FilledMangoQuery<RxDocType> = this.queryModifier(
@@ -140,7 +140,7 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
                      * before emitting the new results.
                      */
                     try {
-                        authData = await server.authHandler(adapter.getRequestHeaders(req));
+                        authData = await server.authHandler(adapter.getRequestHeaders(req)) as any;
                     } catch (err) {
                         adapter.closeConnection(res, 401, 'Unauthorized');
                         return null;
@@ -164,13 +164,15 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
 
 
         this.server.adapter.post(this.server.serverApp, '/' + this.urlPath + '/get', async (req, res) => {
-            const authData = getFromMapOrThrow(authDataByRequest, req);
+            const authData = await getAuthDataByRequest(this.server, req, res);
+            if (!authData) { return; }
+
             const ids: string[] = adapter.getRequestBody(req);
 
             const rxQuery = this.collection.findByIds(ids);
             const resultMap = await rxQuery.exec();
             const resultValues = Array.from(resultMap.values());
-            const docMatcher = getDocAllowedMatcher(this, ensureNotFalsy(authData));
+            const docMatcher = getDocAllowedMatcher(this, ensureNotFalsy(authData) as any);
             let useDocs = resultValues.map(d => d.toJSON());
             useDocs = useDocs.filter(d => docMatcher(d as any));
             useDocs = useDocs.map(d => removeServerOnlyFields(d))
@@ -182,8 +184,10 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
         });
 
         this.server.adapter.post(this.server.serverApp, '/' + this.urlPath + '/set', async (req, res) => {
-            const authData = getFromMapOrThrow(authDataByRequest, req);
-            const docDataMatcherWrite = getDocAllowedMatcher(this, ensureNotFalsy(authData));
+            const authData = await getAuthDataByRequest(this.server, req, res);
+            if (!authData) { return; }
+
+            const docDataMatcherWrite = getDocAllowedMatcher(this, ensureNotFalsy(authData) as any);
 
             let docsData: RxDocType[] = adapter.getRequestBody(req);
 
@@ -235,7 +239,9 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
         });
 
         this.server.adapter.post(this.server.serverApp, '/' + this.urlPath + '/delete', async (req, res) => {
-            const authData = getFromMapOrThrow(authDataByRequest, req);
+            const authData = await getAuthDataByRequest(this.server, req, res);
+            if (!authData) { return; }
+
             const docDataMatcherWrite = getDocAllowedMatcher(this, ensureNotFalsy(authData));
 
             let ids: string[] = adapter.getRequestBody(req);

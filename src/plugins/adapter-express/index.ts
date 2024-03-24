@@ -56,7 +56,7 @@ export const RxServerAdapterExpress: RxServerAdapter<Express, Request, Response>
             error: true,
             message
         };
-        response.statusCode = code;
+        response.status(code);
         response.set("Connection", "close");
         await response.write(JSON.stringify(responseWrite));
         response.end();

@@ -10,6 +10,7 @@ import {
     MangoQuerySelector,
     RxDocumentData,
     flatClone,
+    getFromMapOrCreate,
     getQueryMatcher,
     normalizeMangoQuery,
     uniqueArray
@@ -50,24 +51,29 @@ export function blockPreviousVersionPaths(
 }
 
 
-export function addAuthMiddleware<AuthType>(
+
+const AUTH_PER_REQUEST = new WeakMap<any, Promise<any>>();
+
+export async function getAuthDataByRequest<AuthType, RequestType, ResponseType>(
     server: RxServer<any, AuthType>,
-    path: string,
-): WeakMap<Request, RxServerAuthData<AuthType>> {
-    const authDataByRequest = new WeakMap<Request, RxServerAuthData<AuthType>>();
-    async function auth(req: any, res: any, next: NextFunction) {
-        try {
-            const authData = await server.authHandler(req.headers);
-            authDataByRequest.set(req, authData);
-            next();
-        } catch (err) {
-            server.adapter.closeConnection(res, 401, 'Unauthorized');
-            return;
+    request: RequestType,
+    response: ResponseType
+): Promise<RxServerAuthData<AuthType> | false> {
+    return getFromMapOrCreate(
+        AUTH_PER_REQUEST,
+        request,
+        async () => {
+            try {
+                const headers = server.adapter.getRequestHeaders(request);
+                const authData = await server.authHandler(headers);
+                return authData;
+            } catch (err) {
+                server.adapter.closeConnection(response, 401, 'Unauthorized');
+                return false;
+            }
         }
-    }
-    server.adapter.all(server.serverApp, '/' + path + '/*', auth);
-    return authDataByRequest;
-}
+    );
+};
 
 const defaultMatchingQuery: FilledMangoQuery<any> = {
     selector: {},

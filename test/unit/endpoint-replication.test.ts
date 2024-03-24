@@ -276,7 +276,9 @@ describe('endpoint-replication.test.ts', () => {
 
             // check with plain requests
             for (const path of urlSubPaths) {
-                const response = await fetch(url + '/' + path);
+                const fullUrl = url + '/' + path;
+                const method = path === 'push' ? 'POST' : 'GET';
+                const response = await fetch(fullUrl, { method });
                 assert.equal(response.status, 401);
                 const data = await response.json();
             }
