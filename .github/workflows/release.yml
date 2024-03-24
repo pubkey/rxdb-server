@@ -49,12 +49,13 @@ jobs:
       - name: add git tag
         run: |
           git tag ${{github.event.inputs.version}}
+          git push origin ${{github.event.inputs.version}}
 
-      - name: Push tag
-        uses: actions-ecosystem/action-push-tag@v1
-        with:
-          tag: ${{ github.event.inputs.version }}
-          message: 'Pushing tag ${{ github.event.inputs.version }}'
+      # - name: Push tag
+      #   uses: actions-ecosystem/action-push-tag@v1
+      #   with:
+      #     tag: ${{ github.event.inputs.version }}
+      #     message: 'Pushing tag ${{ github.event.inputs.version }}'
 
 
       - run: npm publish --tag next
