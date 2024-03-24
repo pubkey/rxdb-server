@@ -50,6 +50,13 @@ jobs:
         run: |
           git tag ${{github.event.inputs.version}}
 
+      - name: Push tag
+        uses: actions-ecosystem/action-push-tag@v1
+        with:
+          tag: ${{ github.event.inputs.version }}
+          message: 'Pushing tag ${{ github.event.inputs.version }}'
+
+
       - run: npm publish --tag next
         if: steps.vars.outputs.prerelease == 'true'
         env:
@@ -59,15 +66,6 @@ jobs:
         if: steps.vars.outputs.prerelease == 'false'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      # pull again to make it unlikely that we have a merge conflict.
-      - run: git pull
-
-      - name: Push changes
-        uses: ad-m/github-push-action@master
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ github.ref }}
 
       # must run after the push
       # because it otherwise does not know
