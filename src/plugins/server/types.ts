@@ -36,7 +36,7 @@ export type RxServerAdapter<ServerAppType, RequestType = any, ResponseType = any
     post(app: ServerAppType, path: string, handler: RxServerRouteHandler<RequestType, ResponseType>): void;
     all(app: ServerAppType, path: string, handler: RxServerRouteHandler<RequestType, ResponseType>): void;
 
-    setCors(app: ServerAppType, path: string, cors: string): void;
+    setCors(app: ServerAppType, path: string, cors: string): MaybePromise<void>;
 
     getRequestBody(req: RequestType): any;
     getRequestHeaders(req: RequestType): { [k: string]: string };

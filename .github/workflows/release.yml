@@ -10,8 +10,8 @@ jobs:
       - name: Setup Node.js environment
         uses: actions/setup-node@v4.0.2
         with:
-          node-version-file: '.nvmrc'
-          registry-url: 'https://registry.npmjs.org'
+          node-version-file: ".nvmrc"
+          registry-url: "https://registry.npmjs.org"
 
       - name: Reuse npm cache folder
         uses: actions/cache@v4
@@ -46,6 +46,14 @@ jobs:
           echo "version: ${{ steps.vars.outputs.version }}"
           echo "prerelease: ${{ steps.vars.outputs.prerelease }}"
 
+      - name: add git tag
+        run: |
+          git add .
+          git status .
+          git diff package.json
+          git commit -m ${{github.event.inputs.version}}
+          git tag ${{github.event.inputs.version}}
+
       - run: npm publish --tag next
         if: steps.vars.outputs.prerelease == 'true'
         env:
@@ -56,3 +64,22 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      # pull again to make it unlikely that we have a merge conflict.
+      - run: git pull
+
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}
+
+      # must run after the push
+      # because it otherwise does not know
+      # about the tag and add the old source code to the release.
+      # This might be a bug.
+      - uses: ncipollo/release-action@v1.14.0
+        with:
+          prerelease: ${{ steps.vars.outputs.prerelease }}
+          tag: ${{github.event.inputs.version}}
+          body: 'See Changelog of the RxDB repo'
+          token: ${{ secrets.GITHUB_TOKEN }}
