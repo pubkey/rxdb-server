@@ -30,7 +30,7 @@ import {
     headers,
     queryModifier
 } from './test-helpers.ts';
-import { TEST_SERVER_ADAPTER } from './config-server.ts';
+import { TEST_SERVER_ADAPTER } from './config-server.test.ts';
 
 
 describe('endpoint-rest.test.ts', () => {

@@ -28,7 +28,7 @@ import EventSource from 'eventsource';
 
 import config from './config.ts';
 import { AuthType, authHandler, headers, urlSubPaths } from './test-helpers.ts';
-import { TEST_SERVER_ADAPTER } from './config-server.ts';
+import { TEST_SERVER_ADAPTER } from './config-server.test.ts';
 
 
 describe('endpoint-replication.test.ts', () => {
