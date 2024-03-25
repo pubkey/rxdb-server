@@ -30,38 +30,6 @@ export function setCors(
     }
 }
 
-/**
- * "block" the previous version urls and send a 426 on them so that
- * the clients know they must update.
- */
-export function blockPreviousReplicationVersionPaths(
-    server: RxServer<any, any>,
-    path: string,
-    currentVersion: number
-
-) {
-    let v = 0;
-    while (v < currentVersion) {
-        const version = v;
-        /**
-         * Some adapters do not allow regex or handle them property (like Koa),
-         * so to make it easier, use the hard-coded array of path parts.
-         */
-        [
-            '',
-            'pull',
-            'push',
-            'pullStream'
-        ].forEach(subPath => {
-            server.adapter.all(server.serverApp, '/' + path + '/' + version + '/' + subPath, (req, res) => {
-                server.adapter.closeConnection(res, 426, 'Outdated version ' + version + ' (newest is ' + currentVersion + ')');
-            });
-        });
-        v++;
-    }
-}
-
-
 
 const AUTH_PER_REQUEST = new WeakMap<any, Promise<any>>();
 

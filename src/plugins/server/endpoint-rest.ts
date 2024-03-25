@@ -17,7 +17,6 @@ import {
 } from 'rxdb/plugins/utils';
 
 import {
-    blockPreviousVersionPaths,
     docContainsServerOnlyFields,
     doesContainRegexQuerySelector,
     getAuthDataByRequest,
@@ -59,7 +58,7 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
     ) {
         const adapter = server.adapter;
         setCors(this.server, [this.name].join('/'), cors);
-        blockPreviousVersionPaths(this.server, [this.name].join('/'), collection.schema.version);
+        blockPreviousReplicationVersionPathsRest(this.server, [this.name].join('/'), collection.schema.version);
 
         this.urlPath = [this.name, collection.schema.version].join('/');
         const primaryPath = this.collection.schema.primaryPath;
@@ -284,5 +283,39 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
             adapter.setResponseHeader(res, 'Content-Type', 'application/json');
             adapter.endResponseJson(res, {});
         });
+    }
+}
+
+
+/**
+ * "block" the previous version urls and send a 426 on them so that
+ * the clients know they must update.
+ */
+export function blockPreviousReplicationVersionPathsRest(
+    server: RxServer<any, any>,
+    path: string,
+    currentVersion: number
+
+) {
+    let v = 0;
+    while (v < currentVersion) {
+        const version = v;
+        /**
+         * Some adapters do not allow regex or handle them property (like Koa),
+         * so to make it easier, use the hard-coded array of path parts.
+         */
+        [
+            '',
+            'query',
+            'query/observe',
+            'get',
+            'set',
+            'delete'
+        ].forEach(subPath => {
+            server.adapter.all(server.serverApp, '/' + path + '/' + version + '/' + subPath, (req, res) => {
+                server.adapter.closeConnection(res, 426, 'Outdated version ' + version + ' (newest is ' + currentVersion + ')');
+            });
+        });
+        v++;
     }
 }
