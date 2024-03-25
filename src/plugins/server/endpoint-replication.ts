@@ -20,12 +20,11 @@ import type {
 import { filter, mergeMap } from 'rxjs';
 import {
     ensureNotFalsy,
-    getFromMapOrThrow,
     lastOfArray
 } from 'rxdb/plugins/utils';
 
 import {
-    blockPreviousVersionPaths,
+    blockPreviousReplicationVersionPaths,
     docContainsServerOnlyFields,
     doesContainRegexQuerySelector,
     getAuthDataByRequest,
@@ -58,7 +57,7 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
         const adapter = this.server.adapter;
 
         setCors(this.server, [this.name].join('/'), cors);
-        blockPreviousVersionPaths(this.server, [this.name].join('/'), collection.schema.version);
+        blockPreviousReplicationVersionPaths(this.server, [this.name].join('/'), collection.schema.version);
 
         this.urlPath = [this.name, collection.schema.version].join('/');
 
