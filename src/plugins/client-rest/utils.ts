@@ -11,7 +11,6 @@ export async function postRequest(
             'Accept': 'application/json',
             'Content-Type': 'application/json'
         }, headers),
-        credentials: 'include',
         body: JSON.stringify(body)
     });
     const response = await request.json();
