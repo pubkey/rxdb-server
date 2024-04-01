@@ -25,7 +25,8 @@ export async function createRxServer<ServerAdapterType, AuthType>(
         options,
         authHandler,
         ensureNotFalsy(options.serverApp),
-        options.cors
+        options.cors,
+        options.useCredentials
     );
 
     return server;

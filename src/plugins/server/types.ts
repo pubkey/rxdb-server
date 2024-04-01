@@ -24,6 +24,7 @@ export type RxServerOptions<ServerAppType, AuthType> = {
      * [default='*']
      */
     cors?: '*' | string;
+    useCredentials?: boolean;
 };
 
 
@@ -37,6 +38,7 @@ export type RxServerAdapter<ServerAppType, RequestType = any, ResponseType = any
     all(app: ServerAppType, path: string, handler: RxServerRouteHandler<RequestType, ResponseType>): void;
 
     setCors(app: ServerAppType, path: string, cors: string): MaybePromise<void>;
+    enableCredentials(app: ServerAppType, origin:string): MaybePromise<void>;
 
     getRequestBody(req: RequestType): any;
     getRequestHeaders(req: RequestType): { [k: string]: string };

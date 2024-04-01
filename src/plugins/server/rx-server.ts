@@ -26,7 +26,8 @@ export class RxServer<ServerAppType, AuthType> {
         public readonly options: RxServerOptions<ServerAppType, AuthType>,
         public readonly authHandler: RxServerAuthHandler<AuthType>,
         public readonly serverApp: ServerAppType,
-        public readonly cors: string = '*'
+        public readonly cors: string = '*',
+        public readonly useCredentials: boolean = false
     ) {
         this.database = options.database;
         this.adapter = options.adapter;

@@ -22,6 +22,12 @@ export const RxServerAdapterExpress: RxServerAdapter<Express, Request, Response>
             optionsSuccessStatus: 200
         }));
     },
+    enableCredentials(serverApp, origin) {
+        serverApp.use(expressCors({
+            origin: origin,
+            credentials: true
+        }));
+    },
 
     getRequestBody(req: Request) {
         return req.body;
@@ -71,6 +77,7 @@ export const RxServerAdapterExpress: RxServerAdapter<Express, Request, Response>
             'Content-Type': 'text/event-stream; charset=utf-8',
             'Connection': 'keep-alive',
             'Cache-Control': 'no-cache',
+            'access-control-allow-credentials': 'true',
             /**
              * Required for nginx
              * @link https://stackoverflow.com/q/61029079/3443137

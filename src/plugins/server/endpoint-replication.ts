@@ -55,7 +55,7 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
     ) {
         const adapter = this.server.adapter;
 
-        setCors(this.server, [this.name].join('/'), cors);
+        setCors(this.server, [this.name].join('/'), cors, this.server.options.useCredentials);
         blockPreviousReplicationVersionPaths(this.server, [this.name].join('/'), collection.schema.version);
 
         this.urlPath = [this.name, collection.schema.version].join('/');
