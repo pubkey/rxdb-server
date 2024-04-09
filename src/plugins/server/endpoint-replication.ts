@@ -105,7 +105,7 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
 
             const newCheckpoint = result.documents.length === 0 ? { id, lwt } : {
                 id: ensureNotFalsy(lastOfArray(result.documents))[primaryPath],
-                updatedAt: ensureNotFalsy(lastOfArray(result.documents))._meta.lwt
+                lwt: ensureNotFalsy(lastOfArray(result.documents))._meta.lwt
             };
             const responseDocuments = result.documents.map(d => removeServerOnlyFields(d));
             adapter.setResponseHeader(res, 'Content-Type', 'application/json');
