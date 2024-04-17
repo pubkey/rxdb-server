@@ -31,3 +31,9 @@ export type ServerSyncOptions<RxDocType> = Omit<
      */
     eventSource?: typeof EventSource | any
 };
+
+
+export type RxServerCheckpoint = {
+    id: string;
+    lwt: number;
+};

@@ -3,7 +3,6 @@ import {
     RxCollection,
     RxReplicationHandler,
     RxReplicationWriteToMasterRow,
-    RxStorageDefaultCheckpoint,
     StringKeys,
     prepareQuery,
     getChangedDocumentsSinceQuery,
@@ -32,6 +31,7 @@ import {
     removeServerOnlyFieldsMonad,
     setCors
 } from './helper.ts';
+import type { RxServerCheckpoint } from '../replication-server/types.ts';
 
 export type RxReplicationEndpointMessageType = {
     id: string;
@@ -61,7 +61,7 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
         this.urlPath = [this.name, collection.schema.version].join('/');
 
         const primaryPath = this.collection.schema.primaryPath;
-        const replicationHandler = getReplicationHandlerByCollection(this.server.database, collection.name);
+        const replicationHandler: RxReplicationHandler<RxDocType, RxServerCheckpoint> = getReplicationHandlerByCollection<RxDocType>(this.server.database, collection.name);
         this.queryModifier = (authData, query) => {
             if (doesContainRegexQuerySelector(query.selector)) {
                 throw new Error('$regex queries not allowed because of DOS-attacks');
@@ -88,7 +88,7 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
             const id = urlQuery.id ? urlQuery.id as string : '';
             const lwt = urlQuery.lwt ? parseInt(urlQuery.lwt as any, 10) : 0;
             const limit = urlQuery.limit ? parseInt(urlQuery.limit as any, 10) : 1;
-            const plainQuery = getChangedDocumentsSinceQuery<RxDocType, RxStorageDefaultCheckpoint>(
+            const plainQuery = getChangedDocumentsSinceQuery<RxDocType, RxServerCheckpoint>(
                 this.collection.storageInstance,
                 limit,
                 { id, lwt }
@@ -103,9 +103,9 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
             );
             const result = await this.collection.storageInstance.query(prepared);
 
-            const newCheckpoint = result.documents.length === 0 ? { id, lwt } : {
-                id: ensureNotFalsy(lastOfArray(result.documents))[primaryPath],
-                updatedAt: ensureNotFalsy(lastOfArray(result.documents))._meta.lwt
+            const newCheckpoint: RxServerCheckpoint = result.documents.length === 0 ? { id, lwt } : {
+                id: ensureNotFalsy(lastOfArray(result.documents))[primaryPath] as string,
+                lwt: ensureNotFalsy(lastOfArray(result.documents))._meta.lwt
             };
             const responseDocuments = result.documents.map(d => removeServerOnlyFields(d));
             adapter.setResponseHeader(res, 'Content-Type', 'application/json');
@@ -214,7 +214,13 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
                     adapter.responseWrite(res, 'data: ' + JSON.stringify(filteredAndModified) + '\n\n');
                 } else {
                     const responseDocuments = ensureNotFalsy(filteredAndModified).documents.map(d => removeServerOnlyFields(d as any));
-                    adapter.responseWrite(res, 'data: ' + JSON.stringify({ documents: responseDocuments, checkpoint: ensureNotFalsy(filteredAndModified).checkpoint }) + '\n\n');
+                    adapter.responseWrite(
+                        res,
+                        'data: ' + JSON.stringify({
+                            documents: responseDocuments,
+                            checkpoint: ensureNotFalsy(filteredAndModified).checkpoint
+                        }) + '\n\n'
+                    );
                 }
 
             });
