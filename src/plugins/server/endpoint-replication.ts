@@ -86,8 +86,8 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
 
             const urlQuery = adapter.getRequestQuery(req);
             const id = urlQuery.id ? urlQuery.id as string : '';
-            const lwt = urlQuery.lwt ? parseInt(urlQuery.lwt as any, 10) : 0;
-            const limit = urlQuery.limit ? parseInt(urlQuery.limit as any, 10) : 1;
+            const lwt = urlQuery.lwt ? parseFloat(urlQuery.lwt as any) : 0;
+            const limit = urlQuery.limit ? parseFloat(urlQuery.limit as any) : 1;
             const plainQuery = getChangedDocumentsSinceQuery<RxDocType, RxServerCheckpoint>(
                 this.collection.storageInstance,
                 limit,
