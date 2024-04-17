@@ -127,7 +127,7 @@
     "karma-spec-reporter": "0.0.36",
     "karma-typescript": "5.5.4",
     "karma-webpack": "5.0.1",
-    "mini-css-extract-plugin": "2.8.1",
+    "mini-css-extract-plugin": "2.9.0",
     "minify-all-js": "0.1.9",
     "mocha": "10.4.0",
     "rimraf": "5.0.5",
