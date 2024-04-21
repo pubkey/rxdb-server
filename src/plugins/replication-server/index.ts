@@ -6,10 +6,10 @@ import {
     ReplicationPullOptions,
     ReplicationPushOptions,
     RxReplicationPullStreamItem,
-    RxStorageDefaultCheckpoint,
     ById,
-    addRxPlugin, 
-    newRxError
+    addRxPlugin,
+    newRxError,
+    WithDeletedAndAttachments
 } from 'rxdb/plugins/core';
 import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
 import {
@@ -18,13 +18,16 @@ import {
 } from 'rxdb/plugins/replication';
 
 import { Subject } from 'rxjs';
-import { ServerSyncOptions } from './types.ts';
+import type {
+    RxServerCheckpoint,
+    ServerSyncOptions
+} from './types.ts';
 import { parseResponse } from './helpers.ts';
 import EventSource from 'eventsource';
 
 export * from './types.ts';
 
-export class RxServerReplicationState<RxDocType> extends RxReplicationState<RxDocType, RxStorageDefaultCheckpoint> {
+export class RxServerReplicationState<RxDocType> extends RxReplicationState<RxDocType, RxServerCheckpoint> {
     public readonly outdatedClient$ = new Subject<void>();
     public readonly unauthorized$ = new Subject<void>();
     public readonly forbidden$ = new Subject<void>();
@@ -32,7 +35,7 @@ export class RxServerReplicationState<RxDocType> extends RxReplicationState<RxDo
     constructor(
         public readonly replicationIdentifier: string,
         public readonly collection: RxCollection<RxDocType>,
-        public readonly pull?: ReplicationPullOptions<RxDocType, RxStorageDefaultCheckpoint>,
+        public readonly pull?: ReplicationPullOptions<RxDocType, RxServerCheckpoint>,
         public readonly push?: ReplicationPushOptions<RxDocType>,
         public readonly live: boolean = true,
         public retryTime: number = 1000 * 5,
@@ -81,9 +84,9 @@ export function replicateServer<RxDocType>(
     const collection = options.collection;
     addRxPlugin(RxDBLeaderElectionPlugin);
 
-    const pullStream$: Subject<RxReplicationPullStreamItem<RxDocType, RxStorageDefaultCheckpoint>> = new Subject();
+    const pullStream$: Subject<RxReplicationPullStreamItem<RxDocType, RxServerCheckpoint>> = new Subject();
 
-    let replicationPrimitivesPull: ReplicationPullOptions<RxDocType, RxStorageDefaultCheckpoint> | undefined;
+    let replicationPrimitivesPull: ReplicationPullOptions<RxDocType, RxServerCheckpoint> | undefined;
     if (options.pull) {
         replicationPrimitivesPull = {
             async handler(checkpointOrNull, batchSize) {
@@ -98,7 +101,7 @@ export function replicateServer<RxDocType>(
                         'Content-Type': 'application/json'
                     }, replicationState.headers),
                 });
-                const data = await await parseResponse(replicationState, response);
+                const data = await parseResponse(replicationState, response);
                 return {
                     documents: data.documents,
                     checkpoint: data.checkpoint
@@ -175,7 +178,7 @@ export function replicateServer<RxDocType>(
                     pullStream$.next('RESYNC');
                 }
                 eventSource.onmessage = event => {
-                    const eventData = JSON.parse(event.data);
+                    const eventData: { documents: WithDeletedAndAttachments<RxDocType>[]; checkpoint: RxServerCheckpoint; } = JSON.parse(event.data);
                     pullStream$.next({
                         documents: eventData.documents,
                         checkpoint: eventData.checkpoint
