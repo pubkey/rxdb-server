@@ -130,7 +130,7 @@
     "mini-css-extract-plugin": "2.9.0",
     "minify-all-js": "0.1.9",
     "mocha": "10.4.0",
-    "rimraf": "5.0.5",
+    "rimraf": "5.0.7",
     "rxdb": "15.19.0",
     "rxjs": "7.8.1",
     "ts-loader": "9.5.1",
