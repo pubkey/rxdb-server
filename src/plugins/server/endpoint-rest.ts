@@ -57,7 +57,7 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
         public readonly cors?: string
     ) {
         const adapter = server.adapter;
-        setCors(this.server, [this.name].join('/'), cors);
+        setCors(this.server, [this.name].join('/'), cors, this.server.options.useCredentials);
         blockPreviousReplicationVersionPathsRest(this.server, [this.name].join('/'), collection.schema.version);
 
         this.urlPath = [this.name, collection.schema.version].join('/');
