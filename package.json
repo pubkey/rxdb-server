@@ -115,7 +115,7 @@
     "concurrently": "9.0.0",
     "cross-env": "7.0.3",
     "detect-browser": "5.3.0",
-    "express": "4.19.2",
+    "express": "4.20.0",
     "get-port": "5.1.1",
     "http-server": "14.1.1",
     "karma": "6.4.4",
