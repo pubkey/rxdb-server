@@ -110,7 +110,7 @@
     "@types/node": "20.16.5",
     "@types/sqlite3": "3.1.11",
     "@types/websql": "0.0.30",
-    "babel-loader": "9.1.3",
+    "babel-loader": "9.2.1",
     "babel-plugin-transform-class-properties": "6.24.1",
     "concurrently": "9.0.1",
     "cross-env": "7.0.3",
