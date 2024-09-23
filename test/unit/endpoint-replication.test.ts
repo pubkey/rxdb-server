@@ -34,7 +34,7 @@ import { TEST_SERVER_ADAPTER } from './config-server.test.ts';
 describe('endpoint-replication.test.ts', () => {
     assert.ok(config);
     describe('basics', () => {
-        it('should be able to reach the endpoint', async function () {
+        it('should be able to reach the pull endpoint', async function () {
             const col = await humansCollection.create(1);
             const port = await nextPort();
             const server = await createRxServer({
@@ -57,6 +57,29 @@ describe('endpoint-replication.test.ts', () => {
             assert.ok(data.checkpoint);
             await col.database.destroy();
         });
+        it('should be able to reach the pullStream endpoint', async function () {
+          const col = await humansCollection.create(1);
+          const port = await nextPort();
+          const server = await createRxServer({
+              adapter: TEST_SERVER_ADAPTER,
+              database: col.database,
+              authHandler,
+              port
+          });
+          const endpoint = await server.addReplicationEndpoint({
+              name: randomCouchString(10),
+              collection: col
+          });
+          await server.start();
+          const url = 'http://localhost:' + port + '/' + endpoint.urlPath + '/pullStream';
+          const response = await fetch(url, {
+              headers
+          });
+          const data = await response.json();
+          assert.ok(data.documents[0]);
+          assert.ok(data.checkpoint);
+          await col.database.destroy();
+      });
     });
     describe('replication', () => {
         it('should replicate all data in both directions', async function () {
