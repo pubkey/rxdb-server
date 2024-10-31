@@ -129,7 +129,7 @@
     "karma-webpack": "5.0.1",
     "mini-css-extract-plugin": "2.9.1",
     "minify-all-js": "0.1.9",
-    "mocha": "10.7.3",
+    "mocha": "10.8.2",
     "rimraf": "6.0.1",
     "rxdb": "15.36.1",
     "rxjs": "7.8.1",
