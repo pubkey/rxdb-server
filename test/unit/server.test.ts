@@ -3,8 +3,9 @@ import assert from 'assert';
 import {
     RxDocumentData,
     addRxPlugin,
-    overwritable
-} from 'rxdb/plugins/core';
+    overwritable,
+    randomCouchString,
+} from "rxdb/plugins/core";
 import {
     createRxServer,
     doesContainRegexQuerySelector,
@@ -70,6 +71,37 @@ describe('server.test.ts', () => {
             });
             assert.ok(server);
             await col.database.destroy();
+        });
+
+        it("should apply CORS", async () => {
+            const port = await nextPort();
+            const col = await humansCollection.create(0);
+            const cors = `http://localhost:${port}`;
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port,
+                cors,
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomCouchString(10),
+                collection: col,
+            });
+            await server.start();
+            
+            const get = `http://localhost:${port}/${endpoint.urlPath}/query`;
+            const post = `http://localhost:${port}/${endpoint.urlPath}/push`;
+            const getRes = await fetch(get);
+            const postRes = await fetch(post, {
+                method: "POST",
+            });
+            const optionsRes = await fetch(post, {
+                method: "OPTIONS",
+            });
+            assert.strictEqual(getRes.headers.get("access-control-allow-origin"), cors);
+            assert.strictEqual(postRes.headers.get("access-control-allow-origin"), cors);
+            assert.strictEqual(optionsRes.headers.get("access-control-allow-origin"), cors);
         });
     });
     describe('.doesContainRegexQuerySelector()', () => {
