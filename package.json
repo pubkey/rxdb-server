@@ -106,7 +106,7 @@
     "@babel/preset-typescript": "7.26.0",
     "@babel/types": "7.26.0",
     "@faker-js/faker": "9.2.0",
-    "@types/mocha": "10.0.9",
+    "@types/mocha": "10.0.10",
     "@types/node": "22.9.1",
     "@types/sqlite3": "3.1.11",
     "@types/websql": "0.0.30",
