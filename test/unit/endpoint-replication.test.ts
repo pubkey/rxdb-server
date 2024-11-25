@@ -3,7 +3,7 @@ import assert from 'assert';
 import {
     RxDocumentData,
     clone,
-    randomCouchString
+    randomToken
 } from 'rxdb/plugins/core';
 import {
     type RxServerChangeValidator,
@@ -44,7 +44,7 @@ describe('endpoint-replication.test.ts', () => {
                 port
             });
             const endpoint = await server.addReplicationEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: col
             });
             await server.start();
@@ -55,7 +55,7 @@ describe('endpoint-replication.test.ts', () => {
             const data = await response.json();
             assert.ok(data.documents[0]);
             assert.ok(data.checkpoint);
-            await col.database.destroy();
+            await col.database.close();
         });
     });
     describe('replication', () => {
@@ -69,7 +69,7 @@ describe('endpoint-replication.test.ts', () => {
                 port
             });
             const endpoint = await server.addReplicationEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: col
             });
             await server.start();
@@ -77,7 +77,7 @@ describe('endpoint-replication.test.ts', () => {
             const url = 'http://localhost:' + port + '/' + endpoint.urlPath;
             const replicationState = await replicateServer({
                 collection: clientCol,
-                replicationIdentifier: randomCouchString(10),
+                replicationIdentifier: randomToken(10),
                 url,
                 headers,
                 push: {},
@@ -94,8 +94,8 @@ describe('endpoint-replication.test.ts', () => {
             assert.strictEqual(docsA.length, 10);
 
             await replicationState.cancel();
-            await col.database.destroy();
-            await clientCol.database.destroy();
+            await col.database.close();
+            await clientCol.database.close();
         });
         it('create read update delete', async () => {
             const serverCol = await humansCollection.create(0);
@@ -107,7 +107,7 @@ describe('endpoint-replication.test.ts', () => {
                 port
             });
             const endpoint = await server.addReplicationEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: serverCol
             });
             await server.start();
@@ -115,7 +115,7 @@ describe('endpoint-replication.test.ts', () => {
             const url = 'http://localhost:' + port + '/' + endpoint.urlPath;
             const replicationState = await replicateServer({
                 collection: clientCol,
-                replicationIdentifier: randomCouchString(10),
+                replicationIdentifier: randomToken(10),
                 url,
                 headers,
                 live: true,
@@ -150,8 +150,8 @@ describe('endpoint-replication.test.ts', () => {
                 return docs.length === 0;
             });
 
-            serverCol.database.destroy();
-            clientCol.database.destroy();
+            serverCol.database.close();
+            clientCol.database.close();
         });
         it('should give a 426 error on outdated versions', async () => {
             const newestSchema = clone(schemas.human);
@@ -165,7 +165,7 @@ describe('endpoint-replication.test.ts', () => {
                 port
             });
             const endpoint = await server.addReplicationEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: col
             });
             await server.start();
@@ -180,7 +180,7 @@ describe('endpoint-replication.test.ts', () => {
             const clientCol = await humansCollection.createBySchema(schemas.human);
             const replicationState = await replicateServer({
                 collection: clientCol,
-                replicationIdentifier: randomCouchString(10),
+                replicationIdentifier: randomToken(10),
                 url: 'http://localhost:' + port + '/' + endpoint.name + '/0',
                 headers,
                 push: {},
@@ -200,8 +200,8 @@ describe('endpoint-replication.test.ts', () => {
             assert.strictEqual(firstError.code, 'RC_PULL');
 
             await replicationState.cancel();
-            col.database.destroy();
-            clientCol.database.destroy();
+            col.database.close();
+            clientCol.database.close();
         });
         it('must replicate ongoing changes', async () => {
             const col = await humansCollection.create(5);
@@ -213,7 +213,7 @@ describe('endpoint-replication.test.ts', () => {
                 port
             });
             const endpoint = await server.addReplicationEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: col
             });
             await server.start();
@@ -222,7 +222,7 @@ describe('endpoint-replication.test.ts', () => {
             const url = 'http://localhost:' + port + '/' + endpoint.urlPath;
             const replicationState = await replicateServer({
                 collection: clientCol,
-                replicationIdentifier: randomCouchString(10),
+                replicationIdentifier: randomToken(10),
                 url,
                 headers,
                 live: true,
@@ -256,8 +256,8 @@ describe('endpoint-replication.test.ts', () => {
             });
 
             await replicationState.cancel();
-            col.database.destroy();
-            clientCol.database.destroy();
+            col.database.close();
+            clientCol.database.close();
         });
     });
     describe('authentification', () => {
@@ -271,7 +271,7 @@ describe('endpoint-replication.test.ts', () => {
                 port
             });
             const endpoint = await server.addReplicationEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: col
             });
             await server.start();
@@ -290,7 +290,7 @@ describe('endpoint-replication.test.ts', () => {
             const clientCol = await humansCollection.create(1);
             const replicationState = await replicateServer({
                 collection: clientCol,
-                replicationIdentifier: randomCouchString(10),
+                replicationIdentifier: randomToken(10),
                 url,
                 headers: {},
                 live: true,
@@ -323,8 +323,8 @@ describe('endpoint-replication.test.ts', () => {
             });
 
             await replicationState.cancel();
-            col.database.destroy();
-            clientCol.database.destroy();
+            col.database.close();
+            clientCol.database.close();
         });
     });
     describe('queryModifier', () => {
@@ -343,7 +343,7 @@ describe('endpoint-replication.test.ts', () => {
                 port
             });
             const endpoint = await server.addReplicationEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: serverCol,
                 queryModifier
             });
@@ -352,7 +352,7 @@ describe('endpoint-replication.test.ts', () => {
             const url = 'http://localhost:' + port + '/' + endpoint.urlPath;
             const replicationState = await replicateServer({
                 collection: clientCol,
-                replicationIdentifier: randomCouchString(10),
+                replicationIdentifier: randomToken(10),
                 url,
                 headers,
                 live: true,
@@ -384,8 +384,8 @@ describe('endpoint-replication.test.ts', () => {
             });
 
             await replicationState.cancel();
-            serverCol.database.destroy();
-            clientCol.database.destroy();
+            serverCol.database.close();
+            clientCol.database.close();
         });
         it('should only accept the matching documents on the server', async () => {
             const serverCol = await humansCollection.create(0);
@@ -397,7 +397,7 @@ describe('endpoint-replication.test.ts', () => {
                 port
             });
             const endpoint = await server.addReplicationEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: serverCol,
                 queryModifier
             });
@@ -408,7 +408,7 @@ describe('endpoint-replication.test.ts', () => {
             const url = 'http://localhost:' + port + '/' + endpoint.urlPath;
             const replicationState = await replicateServer({
                 collection: clientCol,
-                replicationIdentifier: randomCouchString(10),
+                replicationIdentifier: randomToken(10),
                 url,
                 headers,
                 live: true,
@@ -450,8 +450,8 @@ describe('endpoint-replication.test.ts', () => {
             await waitUntil(() => forbiddenEmitted === true);
 
             await replicationState.cancel();
-            serverCol.database.destroy();
-            clientCol.database.destroy();
+            serverCol.database.close();
+            clientCol.database.close();
         });
     });
     describe('changeValidator', () => {
@@ -474,7 +474,7 @@ describe('endpoint-replication.test.ts', () => {
                 port
             });
             const endpoint = await server.addReplicationEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: serverCol,
                 changeValidator
             });
@@ -484,7 +484,7 @@ describe('endpoint-replication.test.ts', () => {
             const url = 'http://localhost:' + port + '/' + endpoint.urlPath;
             const replicationState = await replicateServer({
                 collection: clientCol,
-                replicationIdentifier: randomCouchString(10),
+                replicationIdentifier: randomToken(10),
                 url,
                 headers,
                 live: true,
@@ -518,8 +518,8 @@ describe('endpoint-replication.test.ts', () => {
             assert.strictEqual(serverDocAfter.firstName, headers.userid);
 
             await replicationState.cancel();
-            serverCol.database.destroy();
-            clientCol.database.destroy();
+            serverCol.database.close();
+            clientCol.database.close();
         });
     });
     describe('.serverOnlyFields', () => {
@@ -533,7 +533,7 @@ describe('endpoint-replication.test.ts', () => {
                 port
             });
             const endpoint = await server.addReplicationEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: col,
                 serverOnlyFields: ['lastName']
             });
@@ -553,7 +553,7 @@ describe('endpoint-replication.test.ts', () => {
                 assert.strictEqual(typeof doc._meta, 'undefined');
             });
 
-            await col.database.destroy();
+            await col.database.close();
         });
         it('should not emit serverOnlyFields to /pullStream', async () => {
             const col = await humansCollection.create(3);
@@ -565,7 +565,7 @@ describe('endpoint-replication.test.ts', () => {
                 port
             });
             const endpoint = await server.addReplicationEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: col,
                 serverOnlyFields: ['lastName']
             });
@@ -594,7 +594,7 @@ describe('endpoint-replication.test.ts', () => {
                 });
             });
 
-            await col.database.destroy();
+            await col.database.close();
         });
         it('should keep serverOnlyFields on writes', async () => {
             const col = await humansCollection.create(1);
@@ -606,7 +606,7 @@ describe('endpoint-replication.test.ts', () => {
                 port
             });
             const endpoint = await server.addReplicationEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: col,
                 serverOnlyFields: ['lastName']
             });
@@ -616,7 +616,7 @@ describe('endpoint-replication.test.ts', () => {
             const url = 'http://localhost:' + port + '/' + endpoint.urlPath;
             const replicationState = await replicateServer({
                 collection: clientCol,
-                replicationIdentifier: randomCouchString(10),
+                replicationIdentifier: randomToken(10),
                 url,
                 headers,
                 live: true,
@@ -638,7 +638,7 @@ describe('endpoint-replication.test.ts', () => {
             assert.strictEqual(serverDoc.lastName, lastNameBefore);
 
             await replicationState.cancel();
-            await col.database.destroy();
+            await col.database.close();
         });
     });
 });

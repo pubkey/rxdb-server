@@ -4,7 +4,7 @@ import {
     RxDocumentData,
     addRxPlugin,
     overwritable,
-    randomCouchString,
+    randomToken,
 } from "rxdb/plugins/core";
 import {
     createRxServer,
@@ -70,7 +70,7 @@ describe('server.test.ts', () => {
                 port
             });
             assert.ok(server);
-            await col.database.destroy();
+            await col.database.close();
         });
 
         it("should apply CORS", async () => {
@@ -85,7 +85,7 @@ describe('server.test.ts', () => {
                 cors,
             });
             const endpoint = await server.addRestEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: col,
             });
             await server.start();

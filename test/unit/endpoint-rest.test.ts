@@ -1,16 +1,11 @@
 import assert from 'assert';
 
 import {
-    RxDocumentData,
-    addRxPlugin,
-    clone,
     ensureNotFalsy,
     lastOfArray,
-    randomCouchString
+    randomToken
 } from 'rxdb/plugins/core';
 import {
-    type RxServerChangeValidator,
-    type RxServerQueryModifier,
     createRxServer
 } from '../../plugins/server';
 import {
@@ -22,7 +17,7 @@ import {
     humansCollection,
     HumanDocumentType
 } from 'rxdb/plugins/test-utils';
-import { assertThrows, wait, waitUntil } from 'async-test-util';
+import { assertThrows, waitUntil } from 'async-test-util';
 
 import config from './config.ts';
 import {
@@ -46,11 +41,11 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             await server.addRestEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: col
             });
             await server.start();
-            await col.database.destroy();
+            await col.database.close();
         });
         it('should work without auth handler', async () => {
             const port = await nextPort();
@@ -61,11 +56,11 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             await server.addRestEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: col
             });
             await server.start();
-            await col.database.destroy();
+            await col.database.close();
         });
     });
     describe('/query', () => {
@@ -79,7 +74,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: col
             });
             await server.start();
@@ -96,7 +91,7 @@ describe('endpoint-rest.test.ts', () => {
             });
             assert.strictEqual(responseSub.documents.length, 1);
 
-            await col.database.destroy();
+            await col.database.close();
         });
         it('should respect the auth header and queryModifier', async () => {
             const col = await humansCollection.create(5);
@@ -109,7 +104,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: col,
                 queryModifier
             });
@@ -119,7 +114,7 @@ describe('endpoint-rest.test.ts', () => {
             assert.strictEqual(response.documents.length, 1);
             assert.strictEqual(response.documents[0].passportId, 'only-matching');
 
-            await col.database.destroy();
+            await col.database.close();
         });
         it('should not allow $regex queries', async () => {
             const col = await humansCollection.create(5);
@@ -132,7 +127,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: col,
                 queryModifier
             });
@@ -150,7 +145,7 @@ describe('endpoint-rest.test.ts', () => {
                 Error,
                 'Bad Request'
             );
-            await col.database.destroy();
+            await col.database.close();
         });
     });
     describe('/query/observe', () => {
@@ -164,7 +159,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: col
             });
             await server.start();
@@ -184,7 +179,7 @@ describe('endpoint-rest.test.ts', () => {
             const last = ensureNotFalsy(lastOfArray(emitted));
             assert.strictEqual(last.length, 7);
 
-            await col.database.destroy();
+            await col.database.close();
         });
         it('should should automatically reconnect', async () => {
             const col = await humansCollection.create(5);
@@ -195,7 +190,7 @@ describe('endpoint-rest.test.ts', () => {
                 authHandler,
                 port
             });
-            const endpointName = randomCouchString(10);
+            const endpointName = randomToken(10);
             const endpoint = await server.addRestEndpoint({
                 name: endpointName,
                 collection: col
@@ -228,7 +223,7 @@ describe('endpoint-rest.test.ts', () => {
             const last = ensureNotFalsy(lastOfArray(emitted));
             assert.strictEqual(last.length, 6);
 
-            await col.database.destroy();
+            await col.database.close();
         });
         it('should respect the auth header and queryModifier', async () => {
             const col = await humansCollection.create(5);
@@ -241,7 +236,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: col,
                 queryModifier
             });
@@ -256,7 +251,7 @@ describe('endpoint-rest.test.ts', () => {
             assert.strictEqual(last[0].passportId, 'only-matching');
             assert.strictEqual(last.length, 1);
 
-            await col.database.destroy();
+            await col.database.close();
         });
     });
     describe('/get', () => {
@@ -272,7 +267,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: col
             });
             await server.start();
@@ -284,7 +279,7 @@ describe('endpoint-rest.test.ts', () => {
             const responseSub = await client.get([ids[0]]);
             assert.strictEqual(responseSub.documents.length, 1);
 
-            await col.database.destroy();
+            await col.database.close();
         });
         it('should respect the auth header and queryModifier', async () => {
             const col = await humansCollection.create(5);
@@ -300,7 +295,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: col,
                 queryModifier
             });
@@ -310,7 +305,7 @@ describe('endpoint-rest.test.ts', () => {
             assert.strictEqual(response.documents.length, 1);
             assert.strictEqual(response.documents[0].passportId, 'only-matching');
 
-            await col.database.destroy();
+            await col.database.close();
         });
     });
     describe('/set', () => {
@@ -325,7 +320,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: col
             });
             await server.start();
@@ -338,7 +333,7 @@ describe('endpoint-rest.test.ts', () => {
             const docAfter = await col.findOne(setDoc.passportId).exec(true);
             assert.strictEqual(docAfter.age, 100);
 
-            await col.database.destroy();
+            await col.database.close();
         });
         it('should not accept if changeValidator says no', async () => {
             const col = await humansCollection.create(5);
@@ -351,7 +346,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: col,
                 changeValidator: () => false
             });
@@ -369,7 +364,7 @@ describe('endpoint-rest.test.ts', () => {
             const docAfter = await col.findOne(setDoc.passportId).exec(true);
             assert.strictEqual(docAfter.age, ageBefore);
 
-            await col.database.destroy();
+            await col.database.close();
 
         });
     });
@@ -386,7 +381,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: col
             });
             await server.start();
@@ -398,7 +393,7 @@ describe('endpoint-rest.test.ts', () => {
             const docsAfter = await col.find().exec();
             assert.strictEqual(docsAfter.length, 0);
 
-            await col.database.destroy();
+            await col.database.close();
         });
         it('should not accept if not matches queryModifier says no', async () => {
             const col = await humansCollection.create(5);
@@ -413,7 +408,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: col,
                 queryModifier
             });
@@ -432,7 +427,7 @@ describe('endpoint-rest.test.ts', () => {
             const docsAfter2 = await col.find().exec();
             assert.strictEqual(docsAfter2.length, 5);
 
-            await col.database.destroy();
+            await col.database.close();
 
         });
         it('should not accept if changeValidator says no', async () => {
@@ -447,7 +442,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: col,
                 changeValidator: () => false
             });
@@ -461,7 +456,7 @@ describe('endpoint-rest.test.ts', () => {
             const docsAfter = await col.find().exec();
             assert.strictEqual(docsAfter.length, 5);
 
-            await col.database.destroy();
+            await col.database.close();
         });
     });
     describe('.serverOnlyFields', () => {
@@ -475,7 +470,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: col,
                 serverOnlyFields: ['lastName']
             });
@@ -492,7 +487,7 @@ describe('endpoint-rest.test.ts', () => {
                 assert.strictEqual(typeof doc._meta, 'undefined');
             });
 
-            await col.database.destroy();
+            await col.database.close();
         });
         it('should not emit serverOnlyFields to /get', async () => {
             const col = await humansCollection.create(3);
@@ -506,7 +501,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: col,
                 serverOnlyFields: ['lastName']
             });
@@ -520,7 +515,7 @@ describe('endpoint-rest.test.ts', () => {
                 assert.strictEqual(typeof doc._rev, 'undefined');
                 assert.strictEqual(typeof doc._meta, 'undefined');
             });
-            await col.database.destroy();
+            await col.database.close();
         });
         it('should keep the serverOnlyFields value on writes', async () => {
             const col = await humansCollection.create(1);
@@ -533,7 +528,7 @@ describe('endpoint-rest.test.ts', () => {
                 port
             });
             const endpoint = await server.addRestEndpoint({
-                name: randomCouchString(10),
+                name: randomToken(10),
                 collection: col,
                 serverOnlyFields: ['lastName']
             });
@@ -549,7 +544,7 @@ describe('endpoint-rest.test.ts', () => {
             const docAfter = await col.findOne().exec(true);
             assert.strictEqual(lastNameBefore, docAfter.lastName);
             assert.strictEqual(docAfter.firstName, 'foobar');
-            await col.database.destroy();
+            await col.database.close();
         });
     });
 });
