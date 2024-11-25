@@ -30,7 +30,7 @@ export class RxServer<ServerAppType, AuthType> {
     ) {
         this.database = options.database;
         this.adapter = options.adapter;
-        options.database.onDestroy.push(this.closeFn);
+        options.database.onClose.push(this.closeFn);
     }
 
     private ensureNotStarted() {
@@ -102,7 +102,7 @@ export class RxServer<ServerAppType, AuthType> {
     }
 
     async close() {
-        this.database.onDestroy = this.database.onDestroy.filter(fn => fn !== this.closeFn);
+        this.database.onClose = this.database.onClose.filter(fn => fn !== this.closeFn);
         if (this.listenPromise) {
             await this.listenPromise;
             await this.options.adapter.close(this.serverApp);
