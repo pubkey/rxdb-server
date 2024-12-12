@@ -19,14 +19,17 @@ import {
 export function setCors(
     server: RxServer<any, any>,
     path: string,
-    cors?: string
+    cors?: string,
+    enableCredentials?: boolean
 ) {
     let useCors = cors;
     if (!useCors) {
         useCors = server.cors;
     }
     if (useCors) {
-        server.adapter.setCors(server.serverApp, path, useCors);
+        enableCredentials && useCors != '*' ? // if cors is '*' we cannot enable credentials
+        server.adapter.enableCredentials(server.serverApp, useCors) : 
+            server.adapter.setCors(server.serverApp, path, useCors);
     }
 }
 
