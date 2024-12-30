@@ -81,6 +81,7 @@
     "@types/express": "5.0.0",
     "array-push-at-sort-position": "4.0.1",
     "async-test-util": "2.5.0",
+    "cors": "2.8.5",
     "eth-crypto": "2.7.0",
     "eventsource": "2.0.2",
     "percom": "1.1.3",
