@@ -134,7 +134,7 @@
     "rimraf": "6.0.1",
     "rxdb": "16.1.0",
     "rxjs": "7.8.1",
-    "ts-loader": "9.5.1",
+    "ts-loader": "9.5.2",
     "ts-mocha": "10.0.0",
     "ts-node": "10.9.2",
     "typescript": "5.7.3",
