@@ -24,7 +24,7 @@ import {
     humanDefault
 } from 'rxdb/plugins/test-utils';
 import { wait, waitUntil } from 'async-test-util';
-import EventSource from 'eventsource';
+import { EventSource } from 'eventsource';
 
 import config from './config.ts';
 import { AuthType, authHandler, headers, urlSubPaths } from './test-helpers.ts';
@@ -572,7 +572,7 @@ describe('endpoint-replication.test.ts', () => {
             await server.start();
 
             const url = 'http://localhost:' + port + '/' + endpoint.urlPath + '/pullStream';
-            const eventSource = new EventSource(url, { headers });
+            const eventSource = new EventSource(url, { fetch: customFetchWithFixedHeaders(headers) });
             const emitted: { documents: RxDocumentData<HumanDocumentType>[] }[] = [];
             eventSource.onmessage = event => {
                 const eventData = JSON.parse(event.data);
@@ -642,3 +642,17 @@ describe('endpoint-replication.test.ts', () => {
         });
     });
 });
+export function customFetchWithFixedHeaders(headers: any){
+    function customFetch(url: string | URL, options: any = {}) {
+        // Ensure options object exists and headers property is initialized
+        options.headers = {
+            ...headers,              // include default custom headers
+            ...(options.headers || {})            // merge any headers passed in the function call
+        };
+
+        // Call the original fetch with the modified options
+        return fetch(url, options);
+    }
+    return customFetch;
+}
+
