@@ -24,11 +24,12 @@ import {
     humanDefault
 } from 'rxdb/plugins/test-utils';
 import { wait, waitUntil } from 'async-test-util';
-import EventSource from 'eventsource';
+import { EventSource } from 'eventsource';
 
 import config from './config.ts';
 import { AuthType, authHandler, headers, urlSubPaths } from './test-helpers.ts';
 import { TEST_SERVER_ADAPTER } from './config-server.test.ts';
+import { customFetchWithFixedHeaders } from '../../src/utils.ts';
 
 
 describe('endpoint-replication.test.ts', () => {
@@ -572,7 +573,7 @@ describe('endpoint-replication.test.ts', () => {
             await server.start();
 
             const url = 'http://localhost:' + port + '/' + endpoint.urlPath + '/pullStream';
-            const eventSource = new EventSource(url, { headers });
+            const eventSource = new EventSource(url, { fetch: customFetchWithFixedHeaders(headers) });
             const emitted: { documents: RxDocumentData<HumanDocumentType>[] }[] = [];
             eventSource.onmessage = event => {
                 const eventData = JSON.parse(event.data);

@@ -1,7 +1,8 @@
-import { ById, MangoQuery, newRxError } from 'rxdb/plugins/core';
+import { ById, MangoQuery } from 'rxdb/plugins/core';
 import { postRequest } from './utils.ts';
 import { Observable, Subject } from 'rxjs';
-import EventSource from 'eventsource';
+import { EventSource } from 'eventsource';
+import { customFetchWithFixedHeaders } from '../../utils.ts';
 
 export class RxRestClient<RxDocType> {
     constructor(
@@ -43,8 +44,9 @@ export class RxRestClient<RxDocType> {
                  * to set another EventSource implementation.
                  * @link https://www.npmjs.com/package/eventsource
                  */
-                headers: this.headers
-            });
+                fetch: customFetchWithFixedHeaders(this.headers)
+            }
+        );
         eventSource.onmessage = event => {
             const eventData = JSON.parse(event.data);
             result.next(eventData);

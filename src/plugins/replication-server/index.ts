@@ -23,7 +23,8 @@ import type {
     ServerSyncOptions
 } from './types.ts';
 import { parseResponse } from './helpers.ts';
-import EventSource from 'eventsource';
+import { EventSource } from 'eventsource';
+import { customFetchWithFixedHeaders } from '../../utils.ts';
 
 export * from './types.ts';
 
@@ -160,11 +161,11 @@ export function replicateServer<RxDocType>(
                      * to set another EventSource implementation.
                      * @link https://www.npmjs.com/package/eventsource
                      */
-                    headers: replicationState.headers
+                    fetch: customFetchWithFixedHeaders(replicationState.headers)
                 });
                 // TODO check for 426 errors and handle them
                 eventSource.onerror = (err) => {
-                    if (err.status === 401) {
+                    if (err.code === 401) {
                         replicationState.unauthorized$.next();
                         eventSource.close();
                         promiseWait(replicationState.retryTime).then(() => refreshEventSource());
