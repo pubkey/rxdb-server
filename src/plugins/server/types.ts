@@ -8,7 +8,7 @@ import type {
 import { IncomingHttpHeaders } from 'http';
 
 export type RxServerOptions<ServerAppType, AuthType> = {
-    database: RxDatabase;
+    database: RxDatabase<any>;
     adapter: RxServerAdapter<ServerAppType, any, any>;
     serverApp?: ServerAppType;
     authHandler?: RxServerAuthHandler<AuthType>;
