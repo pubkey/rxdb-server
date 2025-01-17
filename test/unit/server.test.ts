@@ -102,6 +102,50 @@ describe('server.test.ts', () => {
             assert.strictEqual(getRes.headers.get("access-control-allow-origin"), cors);
             assert.strictEqual(postRes.headers.get("access-control-allow-origin"), cors);
             assert.strictEqual(optionsRes.headers.get("access-control-allow-origin"), cors);
+
+            server.close();
+            col.database.close();
+        });
+        it('should add multiple endpoints', async () => {
+            const port = await nextPort();
+            const col = await humansCollection.create(0);
+            const cors = `http://localhost:${port}`;
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port,
+                cors,
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+            });
+            const endpoint2 = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+            });
+            const endpoint3 = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+            });
+            await server.start();
+            
+            const get = `http://localhost:${port}/${endpoint.urlPath}/query`;
+            const post = `http://localhost:${port}/${endpoint.urlPath}/push`;
+            const getRes = await fetch(get);
+            const postRes = await fetch(post, {
+                method: "POST",
+            });
+            const optionsRes = await fetch(post, {
+                method: "OPTIONS",
+            });
+            assert.strictEqual(getRes.headers.get("access-control-allow-origin"), cors);
+            assert.strictEqual(postRes.headers.get("access-control-allow-origin"), cors);
+            assert.strictEqual(optionsRes.headers.get("access-control-allow-origin"), cors);
+
+            server.close();
+            col.database.close();
         });
     });
     describe('.doesContainRegexQuerySelector()', () => {
