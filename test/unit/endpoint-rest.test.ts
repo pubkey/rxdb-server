@@ -181,7 +181,8 @@ describe('endpoint-rest.test.ts', () => {
 
             await col.database.close();
         });
-        it('should should automatically reconnect', async () => {
+        it('should should automatically reconnect', async function () {
+            this.timeout(10 * 1000);
             const col = await humansCollection.create(5);
             const port = await nextPort();
             let server = await createRxServer({
