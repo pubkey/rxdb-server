@@ -30,7 +30,7 @@ export type RxServerOptions<ServerAppType, AuthType> = {
 export type RxServerRouteHandler<RequestType = any, ResponseType = any> = (req: RequestType, res: ResponseType, next?: any) => MaybePromise<void>;
 
 export type RxServerAdapter<ServerAppType, RequestType = any, ResponseType = any> = {
-    create(): Promise<ServerAppType>;
+    create(appOptions?: any): Promise<ServerAppType>;
 
     get(app: ServerAppType, path: string, handler: RxServerRouteHandler<RequestType, ResponseType>): void;
     post(app: ServerAppType, path: string, handler: RxServerRouteHandler<RequestType, ResponseType>): void;
