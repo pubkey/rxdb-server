@@ -72,6 +72,36 @@ describe('server.test.ts', () => {
             assert.ok(server);
             await col.database.close();
         });
+        it('should apply jsonOptions the server', async () => {
+            const port = await nextPort();
+            const col = await humansCollection.create(0);
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                appOptions: {jsonOptions:{limit: '1mb'}}, // 1mb should be enough to cover this test
+                database: col.database,
+                authHandler,
+                port
+            });
+            server.serverApp.post("/post",(req,res)=>{
+                const b = req.body
+                console.log(req.headers['content-length'])
+                res.sendStatus(200)
+            })
+
+            await server.start();
+
+            
+            const post = `http://localhost:${port}/post`;
+            const postRes = await fetch(post, {
+                method: "POST",
+                // Set body bigger than express default of 100kb, but reasonably small for testing
+                body: JSON.stringify(new Array(3000).fill(0).map(e=>e=crypto.randomUUID())),
+                headers: { "Content-Type": "application/json" },
+            });
+            assert.strictEqual(postRes.status, 200);
+            server.close()
+            await col.database.close();
+        });
 
         it("should apply CORS", async () => {
             const port = await nextPort();
