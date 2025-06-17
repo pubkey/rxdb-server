@@ -107,7 +107,7 @@
     "@babel/types": "7.27.6",
     "@faker-js/faker": "9.8.0",
     "@types/mocha": "10.0.10",
-    "@types/node": "22.15.31",
+    "@types/node": "22.15.32",
     "@types/sqlite3": "3.1.11",
     "@types/websql": "0.0.30",
     "babel-loader": "10.0.0",
