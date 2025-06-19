@@ -12,7 +12,7 @@ export async function createRxServer<ServerAdapterType, AuthType>(
 ): Promise<RxServer<ServerAdapterType, AuthType>> {
     options = flatClone(options);
     if (!options.serverApp) {
-        options.serverApp = await options.adapter.create();
+        options.serverApp = await options.adapter.create(options.appOptions);
     }
     const authHandler: RxServerAuthHandler<AuthType> = options.authHandler ? options.authHandler : () => {
         return {

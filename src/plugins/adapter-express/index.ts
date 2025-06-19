@@ -10,9 +10,9 @@ import { ensureNotFalsy, getFromMapOrThrow } from 'rxdb/plugins/core';
 export const HTTP_SERVER_BY_EXPRESS = new WeakMap<Express, HttpServer>();
 
 export const RxServerAdapterExpress: RxServerAdapter<Express, Request, Response> = {
-    async create() {
+    async create(appOptions?:any) {
         const app = express();
-        app.use(express.json());
+        app.use(express.json(appOptions?.jsonOptions));
         return app;
     },
     setCors(serverApp, path, cors) {
