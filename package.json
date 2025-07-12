@@ -104,7 +104,7 @@
     "@babel/polyfill": "7.12.1",
     "@babel/preset-env": "7.28.0",
     "@babel/preset-typescript": "7.27.1",
-    "@babel/types": "7.28.0",
+    "@babel/types": "7.28.1",
     "@faker-js/faker": "9.9.0",
     "@types/mocha": "10.0.10",
     "@types/node": "22.16.3",
