@@ -108,7 +108,7 @@
     "@faker-js/faker": "9.9.0",
     "@types/mocha": "10.0.10",
     "@types/node": "22.17.1",
-    "@types/sqlite3": "3.1.11",
+    "@types/sqlite3": "5.1.0",
     "@types/websql": "0.0.30",
     "babel-loader": "10.0.0",
     "babel-plugin-transform-class-properties": "6.24.1",
