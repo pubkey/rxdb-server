@@ -35,7 +35,7 @@ export class RxServerReplicationState<RxDocType> extends RxReplicationState<RxDo
 
     constructor(
         public readonly replicationIdentifier: string,
-        public readonly collection: RxCollection<RxDocType>,
+        public readonly collection: RxCollection<RxDocType, unknown, unknown, unknown>,
         public readonly pull?: ReplicationPullOptions<RxDocType, RxServerCheckpoint>,
         public readonly push?: ReplicationPushOptions<RxDocType>,
         public readonly live: boolean = true,
