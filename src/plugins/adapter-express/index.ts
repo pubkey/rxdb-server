@@ -16,11 +16,13 @@ export const RxServerAdapterExpress: RxServerAdapter<Express, Request, Response>
         return app;
     },
     setCors(serverApp, path, cors) {
-        serverApp.use('/' + path + '/*', expressCors({
+        console.log('s 0 ' + path);
+        serverApp.use('/' + path + '/*splat', expressCors({
             origin: cors,
             // some legacy browsers (IE11, various SmartTVs) choke on 204
             optionsSuccessStatus: 200
         }));
+        console.log('s 1');
     },
 
     getRequestBody(req: Request) {
