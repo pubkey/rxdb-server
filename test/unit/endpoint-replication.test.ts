@@ -326,6 +326,69 @@ describe('endpoint-replication.test.ts', () => {
             col.database.close();
             clientCol.database.close();
         });
+        it('should have access-control-allow-credentials set to true for /pull and /pullStream', async () => {
+            const col = await humansCollection.create(5);
+            await col.insert(schemaObjects.humanData('only-matching', 1, headers.userid));
+
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port,
+                cors: `http://localhost:${port}`
+            });
+            const endpoint = await server.addReplicationEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+
+            // ---- /pull ----
+            const pullUrl = `http://localhost:${port}/${endpoint.urlPath}/pull`;
+            const pullResponse = await fetch(pullUrl, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    ...headers
+                }
+            });
+
+            assert.strictEqual(
+                pullResponse.headers.get('access-control-allow-credentials'),
+                'true',
+                'Expected Access-Control-Allow-Credentials header to be true for /pull'
+            );
+            assert.strictEqual(
+                pullResponse.headers.get('access-control-allow-origin'),
+                `http://localhost:${port}`,
+                'Expected Access-Control-Allow-Origin to match request origin for /pull'
+            );
+
+            // ---- /pullStream ----
+            // We do a plain fetch to just inspect the headers (not consume the SSE stream)
+            const pullStreamUrl = `http://localhost:${port}/${endpoint.urlPath}/pullStream`;
+            const pullStreamResponse = await fetch(pullStreamUrl, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'text/event-stream',
+                    ...headers
+                }
+            });
+
+            assert.strictEqual(
+                pullStreamResponse.headers.get('access-control-allow-credentials'),
+                'true',
+                'Expected Access-Control-Allow-Credentials header to be true for /pullStream'
+            );
+            assert.strictEqual(
+                pullStreamResponse.headers.get('access-control-allow-origin'),
+                `http://localhost:${port}`,
+                'Expected Access-Control-Allow-Origin to match request origin for /pullStream'
+            );
+
+            await col.database.close();
+        });
     });
     describe('queryModifier', () => {
         const queryModifier: RxServerQueryModifier<AuthType, HumanDocumentType> = (authData, query) => {
@@ -642,7 +705,7 @@ describe('endpoint-replication.test.ts', () => {
         });
     });
 });
-export function customFetchWithFixedHeaders(headers: any){
+export function customFetchWithFixedHeaders(headers: any) {
     function customFetch(url: string | URL, options: any = {}) {
         // Ensure options object exists and headers property is initialized
         options.headers = {

@@ -7,6 +7,7 @@ export async function postRequest(
 ) {
     const request = await fetch(url, {
         method: 'POST',
+        credentials: 'include',
         headers: Object.assign({
             'Accept': 'application/json',
             'Content-Type': 'application/json'

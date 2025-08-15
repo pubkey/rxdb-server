@@ -19,7 +19,8 @@ export const RxServerAdapterExpress: RxServerAdapter<Express, Request, Response>
         serverApp.use('/' + path + '/*splat', expressCors({
             origin: cors,
             // some legacy browsers (IE11, various SmartTVs) choke on 204
-            optionsSuccessStatus: 200
+            optionsSuccessStatus: 200,
+            credentials: true
         }));
     },
 
@@ -71,6 +72,12 @@ export const RxServerAdapterExpress: RxServerAdapter<Express, Request, Response>
             'Content-Type': 'text/event-stream; charset=utf-8',
             'Connection': 'keep-alive',
             'Cache-Control': 'no-cache',
+
+            /**
+             * @link https://github.com/pubkey/rxdb-server/pull/58
+             */
+            'access-control-allow-credentials': 'true',
+
             /**
              * Required for nginx
              * @link https://stackoverflow.com/q/61029079/3443137

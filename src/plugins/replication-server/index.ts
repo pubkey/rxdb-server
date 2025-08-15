@@ -96,6 +96,7 @@ export function replicateServer<RxDocType>(
                 const url = options.url + `/pull?lwt=${lwt}&id=${id}&limit=${batchSize}`;
                 const response = await fetch(url, {
                     method: 'GET',
+                    credentials: 'include',
                     headers: Object.assign({
                         'Accept': 'application/json',
                         'Content-Type': 'application/json'
@@ -119,6 +120,7 @@ export function replicateServer<RxDocType>(
             async handler(changeRows) {
                 const response = await fetch(options.url + '/push', {
                     method: 'POST',
+                    credentials: 'include',
                     headers: Object.assign({
                         'Accept': 'application/json',
                         'Content-Type': 'application/json'

@@ -147,6 +147,49 @@ describe('endpoint-rest.test.ts', () => {
             );
             await col.database.close();
         });
+        it('should have access-control-allow-credentials set to true', async () => {
+            const col = await humansCollection.create(5);
+            await col.insert(schemaObjects.humanData('only-matching', 1, headers.userid));
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port,
+                cors: `http://localhost:${port}`
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                queryModifier
+            });
+            await server.start();
+
+            const url = `http://localhost:${port}/${endpoint.urlPath}/query`;
+
+            const fetchResult = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ selector: {} }),
+            });
+
+            assert.strictEqual(
+                fetchResult.headers.get('access-control-allow-credentials'),
+                'true',
+                'Expected Access-Control-Allow-Credentials header to be true'
+            );
+
+            assert.strictEqual(
+                fetchResult.headers.get('access-control-allow-origin'),
+                `http://localhost:${port}`,
+                'Expected Access-Control-Allow-Origin to match request origin'
+            );
+
+            await col.database.close();
+        });
     });
     describe('/query/observe', () => {
         it('should return the correct query results', async () => {
@@ -305,6 +348,51 @@ describe('endpoint-rest.test.ts', () => {
             const response = await client.get(ids);
             assert.strictEqual(response.documents.length, 1);
             assert.strictEqual(response.documents[0].passportId, 'only-matching');
+
+            await col.database.close();
+        });
+        it('should have access-control-allow-credentials set to true for /query/observe', async () => {
+            const col = await humansCollection.create(5);
+            await col.insert(schemaObjects.humanData('only-matching', 1, headers.userid));
+
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port,
+                cors: `http://localhost:${port}`
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                queryModifier
+            });
+            await server.start();
+
+            const url = `http://localhost:${port}/${endpoint.urlPath}/query/observe`;
+
+            // Just like /query, we POST to /query/observe
+            const fetchResult = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ selector: {} }),
+            });
+
+            assert.strictEqual(
+                fetchResult.headers.get('access-control-allow-credentials'),
+                'true',
+                'Expected Access-Control-Allow-Credentials header to be true'
+            );
+
+            assert.strictEqual(
+                fetchResult.headers.get('access-control-allow-origin'),
+                `http://localhost:${port}`,
+                'Expected Access-Control-Allow-Origin to match request origin'
+            );
 
             await col.database.close();
         });
