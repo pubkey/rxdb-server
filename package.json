@@ -107,7 +107,7 @@
     "@babel/types": "7.28.2",
     "@faker-js/faker": "9.9.0",
     "@types/mocha": "10.0.10",
-    "@types/node": "24.2.1",
+    "@types/node": "24.3.0",
     "@types/websql": "0.0.30",
     "babel-loader": "10.0.0",
     "babel-plugin-transform-class-properties": "6.24.1",
