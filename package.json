@@ -105,7 +105,7 @@
     "@babel/preset-env": "7.28.5",
     "@babel/preset-typescript": "7.28.5",
     "@babel/types": "7.28.5",
-    "@faker-js/faker": "10.1.0",
+    "@faker-js/faker": "10.2.0",
     "@types/mocha": "10.0.10",
     "@types/node": "24.10.4",
     "@types/websql": "0.0.30",
