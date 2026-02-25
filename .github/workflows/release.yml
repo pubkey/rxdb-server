@@ -5,6 +5,13 @@ on:
 jobs:
   release:
     runs-on: ubuntu-24.04
+
+    # @link https://docs.github.com/en/actions/using-jobs/assigning-permissions-to-jobs
+    permissions:
+      contents: write
+      # @link https://docs.npmjs.com/generating-provenance-statements#about-npm-provenance
+      id-token: write
+
     steps:
       - uses: actions/checkout@v6
       - name: Setup Node.js environment
