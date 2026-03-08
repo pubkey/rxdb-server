@@ -110,7 +110,7 @@
     "@types/mocha": "10.0.10",
     "@types/node": "24.12.0",
     "@types/websql": "0.0.30",
-    "babel-loader": "10.0.0",
+    "babel-loader": "10.1.0",
     "babel-plugin-transform-class-properties": "6.24.1",
     "concurrently": "9.2.1",
     "cross-env": "10.1.0",
