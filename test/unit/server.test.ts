@@ -12,9 +12,9 @@ import {
     mergeServerDocumentFieldsMonad
 } from '../../plugins/server';
 import {
-    nextPort,
     humansCollection
 } from 'rxdb/plugins/test-utils';
+import { nextPort } from './test-helpers.ts';
 import { RxDBMigrationPlugin } from 'rxdb/plugins/migration-schema';
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
 import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';

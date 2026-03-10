@@ -16,13 +16,13 @@ import {
 import {
     schemaObjects,
     schemas,
-    nextPort,
     humansCollection,
     ensureReplicationHasNoErrors,
     isFastMode,
     HumanDocumentType,
     humanDefault
 } from 'rxdb/plugins/test-utils';
+import { nextPort } from './test-helpers.ts';
 import { wait, waitUntil } from 'async-test-util';
 import { EventSource } from 'eventsource';
 

@@ -5,6 +5,11 @@ import {
 import type { IncomingHttpHeaders } from 'node:http';
 import { RxServerQueryModifier } from '../../src/plugins/server';
 import { HumanDocumentType } from 'rxdb/plugins/test-utils';
+import getPort from 'get-port';
+
+export async function nextPort(): Promise<number> {
+    return getPort();
+}
 
 
 export const urlSubPaths = ['pull', 'push', 'pullStream'] as const;
