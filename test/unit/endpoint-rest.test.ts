@@ -13,10 +13,10 @@ import {
 } from '../../plugins/client-rest';
 import {
     schemaObjects,
-    nextPort,
     humansCollection,
     HumanDocumentType
 } from 'rxdb/plugins/test-utils';
+import { nextPort } from './test-helpers.ts';
 import { assertThrows, waitUntil } from 'async-test-util';
 
 import config from './config.ts';
