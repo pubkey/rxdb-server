@@ -78,7 +78,7 @@
   },
   "dependencies": {
     "@types/express": "5.0.6",
-    "array-push-at-sort-position": "4.0.1",
+    "array-push-at-sort-position": "5.0.0",
     "async-test-util": "2.5.0",
     "cors": "2.8.6",
     "eth-crypto": "4.0.0",
