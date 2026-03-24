@@ -1,0 +1,88 @@
+name: Update RxDB Version
+
+on:
+  workflow_dispatch:
+  # Triggered by the rxdb release script via GitHub API:
+  # curl -X POST https://api.github.com/repos/pubkey/rxdb-server/dispatches \
+  #   -H "Authorization: token <PAT>" \
+  #   -d '{"event_type":"rxdb-release"}'
+  repository_dispatch:
+    types: [rxdb-release]
+
+# Ensure only one instance runs at a time
+concurrency:
+  group: update-rxdb
+  cancel-in-progress: true
+
+jobs:
+  update-rxdb:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Get current rxdb version from package.json
+        id: current
+        run: |
+          CURRENT_VERSION=$(node -e "console.log(require('./package.json').devDependencies.rxdb)")
+          echo "version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Get latest and next rxdb versions from npm
+        id: npm
+        run: |
+          LATEST_VERSION=$(npm view rxdb dist-tags.latest)
+          NEXT_VERSION=$(npm view rxdb dist-tags.next 2>/dev/null || echo "")
+          echo "latest=$LATEST_VERSION" >> "$GITHUB_OUTPUT"
+          echo "next=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Determine target version
+        id: target
+        run: |
+          CURRENT="${{ steps.current.outputs.version }}"
+          LATEST="${{ steps.npm.outputs.latest }}"
+          NEXT="${{ steps.npm.outputs.next }}"
+
+          echo "Current: $CURRENT"
+          echo "Latest:  $LATEST"
+          echo "Next:    $NEXT"
+
+          # Collect non-empty versions and pick the highest using npx semver
+          VERSIONS="$LATEST"
+          if [ -n "$NEXT" ]; then
+            VERSIONS="$VERSIONS $NEXT"
+          fi
+
+          TARGET=$(npx -y semver $VERSIONS | tail -1)
+          echo "Target:  $TARGET"
+
+          if [ "$CURRENT" = "$TARGET" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=$TARGET" >> "$GITHUB_OUTPUT"
+
+      - name: Update package.json
+        if: steps.target.outputs.changed == 'true'
+        run: |
+          TARGET="${{ steps.target.outputs.version }}"
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf-8'));
+            pkg.devDependencies.rxdb = '$TARGET';
+            fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n', 'utf-8');
+          "
+
+      - name: Commit and push
+        if: steps.target.outputs.changed == 'true'
+        run: |
+          TARGET="${{ steps.target.outputs.version }}"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add package.json
+          git commit -m "chore: update rxdb to $TARGET"
+          git push
