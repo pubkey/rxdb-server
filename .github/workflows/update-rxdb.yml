@@ -1,9 +1,6 @@
 name: Update RxDB Version
 
 on:
-  schedule:
-    # Fallback poll every 15 minutes in case the webhook is missed
-    - cron: "*/15 * * * *"
   workflow_dispatch:
   # Triggered by the rxdb release script via GitHub API:
   # curl -X POST https://api.github.com/repos/pubkey/rxdb-server/dispatches \
