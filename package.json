@@ -66,6 +66,7 @@
     "build:bundle": "rimraf -rf rxdb-server.tgz && npx yarn@1.22.10 pack ./ --filename ./rxdb-server.tgz",
     "version": "node ./scripts/version.js",
     "check-types": "npm run build && tsc",
+    "check:code-block-line-length": "node ./scripts/check-code-block-line-length.js",
     "test:unit": "npm run build && mocha --require ts-node/register ./test/unit.test.ts --bail --exit",
     "test:integration:init": "(cd ./scripts && bash test-integration-init.sh)",
     "test:integration:memory": "(cd test-integration && npm run transpile && npm run test:node:memory)",
