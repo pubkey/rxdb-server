@@ -456,6 +456,41 @@ describe('endpoint-rest.test.ts', () => {
             await col.database.close();
 
         });
+        it('should not accept if existing document does not match queryModifier', async () => {
+            const col = await humansCollection.create(0);
+            // Insert a document belonging to a different user (firstName: 'bob')
+            await col.insert(schemaObjects.humanData('bob-passport', 25, 'bob'));
+
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                queryModifier
+            });
+            await server.start();
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            // alice tries to update bob's document by changing firstName to alice's userid
+            const setDoc: HumanDocumentType = {
+                passportId: 'bob-passport',
+                firstName: headers.userid,
+                lastName: 'Smith',
+                age: 30
+            };
+            await client.set([setDoc]);
+
+            // the document must NOT have been modified because alice should not be able to update bob's document
+            const docAfter = await col.findOne('bob-passport').exec(true);
+            assert.strictEqual(docAfter.firstName, 'bob');
+
+            await col.database.close();
+        });
     });
     describe('/delete', () => {
         it('should delete the documents', async () => {
