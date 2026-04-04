@@ -219,6 +219,11 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
                     if (!doc) {
                         promises.push(this.collection.insert(docData).catch(err => onWriteError(err, docData)));
                     } else {
+                        const isAllowedDoc = docDataMatcherWrite(doc.toJSON(true) as any);
+                        if (!isAllowedDoc) {
+                            adapter.closeConnection(res, 403, 'Forbidden');
+                            return;
+                        }
                         const isAllowed = this.changeValidator(authData, {
                             newDocumentState: removeServerOnlyFields(docData as any),
                             assumedMasterState: removeServerOnlyFields(doc.toJSON(true))
