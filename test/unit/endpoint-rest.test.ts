@@ -456,6 +456,32 @@ describe('endpoint-rest.test.ts', () => {
             await col.database.close();
 
         });
+        it('should not accept inserts if changeValidator says no', async () => {
+            const col = await humansCollection.create(0);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                changeValidator: () => false
+            });
+            await server.start();
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            const newDoc = schemaObjects.humanData('new-doc-id', 1, 'foobar');
+            await client.set([newDoc]);
+
+            // must not be inserted because changeValidator returns false
+            const docsAfter = await col.find().exec();
+            assert.strictEqual(docsAfter.length, 0);
+
+            await col.database.close();
+        });
     });
     describe('/delete', () => {
         it('should delete the documents', async () => {
