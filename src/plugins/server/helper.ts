@@ -45,6 +45,10 @@ export async function getAuthDataByRequest<AuthType, RequestType, ResponseType>(
             try {
                 const headers = server.adapter.getRequestHeaders(request);
                 const authData = await server.authHandler(headers);
+                if (authData.validUntil < Date.now()) {
+                    server.adapter.closeConnection(response, 401, 'Unauthorized');
+                    return false;
+                }
                 return authData;
             } catch (err) {
                 server.adapter.closeConnection(response, 401, 'Unauthorized');

@@ -6,7 +6,8 @@ import {
     randomToken
 } from 'rxdb/plugins/core';
 import {
-    createRxServer
+    createRxServer,
+    RxServerAuthHandler
 } from '../../plugins/server';
 import {
     createRestClient
@@ -23,7 +24,8 @@ import config from './config.ts';
 import {
     authHandler,
     headers,
-    queryModifier
+    queryModifier,
+    AuthType
 } from './test-helpers.ts';
 import { TEST_SERVER_ADAPTER } from './config-server.test.ts';
 
@@ -60,6 +62,44 @@ describe('endpoint-rest.test.ts', () => {
                 collection: col
             });
             await server.start();
+            await col.database.close();
+        });
+    });
+    describe('auth expiration (validUntil)', () => {
+        it('should reject requests when authHandler returns expired validUntil', async () => {
+            const col = await humansCollection.create(5);
+            const port = await nextPort();
+
+            /**
+             * This auth handler returns a validUntil in the past,
+             * meaning the auth data is already expired.
+             */
+            const expiredAuthHandler: RxServerAuthHandler<AuthType> = (_headers) => {
+                return {
+                    validUntil: Date.now() - 10000,
+                    data: { userid: 'alice' }
+                };
+            };
+
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler: expiredAuthHandler,
+                port
+            });
+            const endpoint = server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            await assertThrows(
+                () => client.query({ selector: {} }),
+                Error,
+                'Unauthorized'
+            );
+
             await col.database.close();
         });
     });
