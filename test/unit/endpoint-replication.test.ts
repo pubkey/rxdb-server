@@ -720,6 +720,7 @@ describe('endpoint-replication.test.ts', () => {
             assert.strictEqual(typeof conflictDoc.lastName, 'undefined', 'serverOnlyField lastName must not be in conflict response');
             assert.strictEqual(typeof conflictDoc._rev, 'undefined', '_rev must not be in conflict response');
             assert.strictEqual(typeof conflictDoc._meta, 'undefined', '_meta must not be in conflict response');
+            assert.strictEqual(typeof conflictDoc._attachments, 'undefined', '_attachments must not be in conflict response');
 
             await serverCol.database.close();
         });
