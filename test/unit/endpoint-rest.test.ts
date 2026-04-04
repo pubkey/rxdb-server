@@ -635,5 +635,41 @@ describe('endpoint-rest.test.ts', () => {
             assert.strictEqual(docAfter.firstName, 'foobar');
             await col.database.close();
         });
+        it('should not allow clients to overwrite serverOnlyFields via /set', async () => {
+            const col = await humansCollection.create(1);
+            const doc = await col.findOne().exec(true);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                serverOnlyFields: ['lastName']
+            });
+            await server.start();
+
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+            const lastNameBefore = doc.lastName;
+
+            // Get document from server (lastName is stripped as a server-only field)
+            let docFromServer = ensureNotFalsy(await client.get([doc.primary])).documents[0];
+
+            // Client attempts to set the server-only field along with a regular update
+            docFromServer.lastName = 'HackedValue';
+            docFromServer.firstName = 'UpdatedName';
+
+            await client.set([docFromServer]);
+
+            // The server-only field must be preserved with its original value,
+            // not overwritten by the client's value
+            const docAfter = await col.findOne().exec(true);
+            assert.strictEqual(docAfter.firstName, 'UpdatedName');
+            assert.strictEqual(docAfter.lastName, lastNameBefore);
+            await col.database.close();
+        });
     });
 });
