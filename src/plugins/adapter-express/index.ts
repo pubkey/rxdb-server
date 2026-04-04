@@ -17,7 +17,18 @@ export const RxServerAdapterExpress: RxServerAdapter<Express, Request, Response>
     },
     setCors(serverApp, path, cors) {
         serverApp.use('/' + path + '/*splat', expressCors({
-            origin: cors,
+            /**
+             * When cors is '*' we must NOT pass the literal string '*'
+             * because the cors middleware always sets credentials: true.
+             * The CORS spec forbids Access-Control-Allow-Origin: * together
+             * with Access-Control-Allow-Credentials: true — browsers will
+             * reject such responses.
+             *
+             * Setting origin to `true` tells the cors middleware to reflect
+             * the request's Origin header, which is spec-compliant with
+             * credentials and still allows every origin.
+             */
+            origin: cors === '*' ? true : cors,
             // some legacy browsers (IE11, various SmartTVs) choke on 204
             optionsSuccessStatus: 200,
             credentials: true

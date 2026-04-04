@@ -106,6 +106,51 @@ describe('server.test.ts', () => {
             server.close();
             col.database.close();
         });
+        it('should reflect the request Origin when cors is set to wildcard', async () => {
+            const port = await nextPort();
+            const col = await humansCollection.create(0);
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port,
+                cors: '*',
+            });
+            const endpoint = server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+            });
+            await server.start();
+
+            const requestOrigin = 'http://example.com';
+            const url = `http://localhost:${port}/${endpoint.urlPath}/query`;
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Origin': requestOrigin,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ selector: {} }),
+            });
+
+            /**
+             * When credentials are enabled (which is always the case),
+             * Access-Control-Allow-Origin must NOT be '*' because
+             * browsers reject wildcard origins with credentials.
+             * Instead, the server must reflect the request's Origin.
+             */
+            assert.strictEqual(
+                res.headers.get('access-control-allow-origin'),
+                requestOrigin,
+                'Access-Control-Allow-Origin must reflect the request Origin, not use wildcard, when credentials are enabled'
+            );
+            assert.strictEqual(
+                res.headers.get('access-control-allow-credentials'),
+                'true'
+            );
+
+            await col.database.close();
+        });
         it('should add multiple endpoints', async () => {
             const port = await nextPort();
             const col = await humansCollection.create(0);
