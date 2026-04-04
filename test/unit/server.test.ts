@@ -149,6 +149,7 @@ describe('server.test.ts', () => {
                 'true'
             );
 
+            server.close();
             await col.database.close();
         });
         it('should add multiple endpoints', async () => {
