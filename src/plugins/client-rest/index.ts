@@ -54,8 +54,8 @@ export class RxRestClient<RxDocType> {
         return result.asObservable();
     }
 
-    get(ids: string[]): Promise<{ documents: RxDocType[] }> {
-        const response = postRequest(
+    async get(ids: string[]): Promise<{ documents: RxDocType[] }> {
+        const response = await postRequest(
             this.endpointUrl + '/get',
             ids,
             this.headers
@@ -64,8 +64,8 @@ export class RxRestClient<RxDocType> {
         return response;
     }
 
-    set(docs: RxDocType[]) {
-        const response = postRequest(
+    async set(docs: RxDocType[]) {
+        const response = await postRequest(
             this.endpointUrl + '/set',
             docs,
             this.headers
@@ -74,8 +74,8 @@ export class RxRestClient<RxDocType> {
         return response;
     }
 
-    delete(ids: string[]) {
-        const response = postRequest(
+    async delete(ids: string[]) {
+        const response = await postRequest(
             this.endpointUrl + '/delete',
             ids,
             this.headers
