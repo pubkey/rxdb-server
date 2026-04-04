@@ -2,6 +2,7 @@ import assert from 'assert';
 
 import {
     RxDocumentData,
+    RxReplicationWriteToMasterRow,
     clone,
     randomToken
 } from 'rxdb/plugins/core';
@@ -658,6 +659,69 @@ describe('endpoint-replication.test.ts', () => {
             });
 
             await col.database.close();
+        });
+        it('should not return serverOnlyFields in /push conflict responses', async () => {
+            const serverCol = await humansCollection.create(0);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: serverCol.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addReplicationEndpoint({
+                name: randomToken(10),
+                collection: serverCol,
+                serverOnlyFields: ['lastName']
+            });
+            await server.start();
+
+            // insert a document on the server directly
+            const docData = schemaObjects.humanData('conflict-doc', 25, headers.userid);
+            await serverCol.insert(docData);
+
+            // make a push request with a wrong assumedMasterState to trigger a conflict
+            const url = 'http://localhost:' + port + '/' + endpoint.urlPath + '/push';
+            const pushBody: RxReplicationWriteToMasterRow<HumanDocumentType>[] = [{
+                newDocumentState: {
+                    passportId: docData.passportId,
+                    firstName: headers.userid,
+                    lastName: 'new-last-name',
+                    age: 99,
+                    _deleted: false,
+                    _attachments: {}
+                },
+                assumedMasterState: {
+                    passportId: docData.passportId,
+                    firstName: headers.userid,
+                    lastName: 'wrong-assumed-last-name',
+                    age: 1,
+                    _deleted: false,
+                    _attachments: {}
+                }
+            }];
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    ...headers
+                },
+                body: JSON.stringify(pushBody)
+            });
+            assert.strictEqual(response.status, 200);
+            const conflicts: RxDocumentData<HumanDocumentType>[] = await response.json();
+
+            // a conflict must have occurred
+            assert.strictEqual(conflicts.length, 1);
+
+            // the conflict document must not contain serverOnlyFields or internal fields
+            const conflictDoc = conflicts[0];
+            assert.strictEqual(typeof conflictDoc.lastName, 'undefined', 'serverOnlyField lastName must not be in conflict response');
+            assert.strictEqual(typeof conflictDoc._rev, 'undefined', '_rev must not be in conflict response');
+            assert.strictEqual(typeof conflictDoc._meta, 'undefined', '_meta must not be in conflict response');
+
+            await serverCol.database.close();
         });
         it('should keep serverOnlyFields on writes', async () => {
             const col = await humansCollection.create(1);

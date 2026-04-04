@@ -172,9 +172,10 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
             }
 
             const conflicts = await replicationHandler.masterWrite(useRows);
+            const cleanedConflicts = conflicts.map(d => removeServerOnlyFields(d));
 
             adapter.setResponseHeader(res, 'Content-Type', 'application/json');
-            adapter.endResponseJson(res, conflicts);
+            adapter.endResponseJson(res, cleanedConflicts);
         });
         this.server.adapter.get(this.server.serverApp, '/' + this.urlPath + '/pullStream', async (req, res) => {
 
