@@ -27,7 +27,7 @@ jobs:
         run: npm install
 
       - name: build rxdb from source
-        run: (cd node_modules/rxdb && npm run build)
+        run: bash scripts/build-rxdb.sh
 
       - name: build code
         run: npm run build
