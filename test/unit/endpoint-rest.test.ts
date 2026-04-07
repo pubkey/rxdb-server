@@ -447,7 +447,11 @@ describe('endpoint-rest.test.ts', () => {
             const setDoc = docs[0].toMutableJSON();
             setDoc.age = 100;
 
-            const response = await client.set([setDoc]);
+            await assertThrows(
+                () => client.set([setDoc]),
+                Error,
+                'error'
+            );
 
             // must still be the same because write must not be accepted
             const docAfter = await col.findOne(setDoc.passportId).exec(true);
@@ -455,6 +459,64 @@ describe('endpoint-rest.test.ts', () => {
 
             await col.database.close();
 
+        });
+        it('should throw an error via handleError when the server rejects a set', async () => {
+            const col = await humansCollection.create(1);
+            const docs = await col.find().exec();
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                changeValidator: () => false
+            });
+            await server.start();
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            const setDoc = docs[0].toMutableJSON();
+            setDoc.age = 100;
+
+            // When the server rejects the write, the client should throw an error
+            await assertThrows(
+                () => client.set([setDoc]),
+                Error,
+                'error'
+            );
+
+            await col.database.close();
+        });
+        it('should throw an error via handleError when the server rejects a delete', async () => {
+            const col = await humansCollection.create(1);
+            const docs = await col.find().exec();
+            const ids = docs.map(d => d.passportId);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                changeValidator: () => false
+            });
+            await server.start();
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            // When the server rejects the delete, the client should throw an error
+            await assertThrows(
+                () => client.delete(ids),
+                Error,
+                'error'
+            );
+
+            await col.database.close();
         });
     });
     describe('/delete', () => {
@@ -504,7 +566,11 @@ describe('endpoint-rest.test.ts', () => {
             await server.start();
             const client = createRestClient('http://localhost:' + port + '/' + endpoint.urlPath, headers);
 
-            await client.delete(ids);
+            await assertThrows(
+                () => client.delete(ids),
+                Error,
+                'error'
+            );
 
             // must still be the same because write must not be accepted
             const docsAfter = await col.find().exec();
@@ -539,7 +605,11 @@ describe('endpoint-rest.test.ts', () => {
 
             const client = createRestClient('http://localhost:' + port + '/' + endpoint.urlPath, headers);
 
-            await client.delete(ids);
+            await assertThrows(
+                () => client.delete(ids),
+                Error,
+                'error'
+            );
 
             // must still be the same because write must not be accepted
             const docsAfter = await col.find().exec();
