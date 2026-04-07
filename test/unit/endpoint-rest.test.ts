@@ -705,5 +705,35 @@ describe('endpoint-rest.test.ts', () => {
             assert.strictEqual(docAfter.firstName, 'foobar');
             await col.database.close();
         });
+        it('should allow deleting documents when serverOnlyFields is set', async () => {
+            const col = await humansCollection.create(1);
+            const doc = await col.findOne().exec(true);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                serverOnlyFields: ['lastName']
+            });
+            await server.start();
+
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            // deleting a document should work even when serverOnlyFields is configured
+            const docsBefore = await col.find().exec();
+            assert.strictEqual(docsBefore.length, 1);
+
+            await client.delete([doc.primary]);
+
+            const docsAfter = await col.find().exec();
+            assert.strictEqual(docsAfter.length, 0);
+
+            await col.database.close();
+        });
     });
 });

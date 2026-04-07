@@ -259,8 +259,8 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
                         }
 
                         const isAllowedChange = this.changeValidator(authData, {
-                            newDocumentState: doc.toJSON(true) as any,
-                            assumedMasterState: doc.toJSON(true) as any
+                            newDocumentState: removeServerOnlyFields(doc.toJSON(true)) as any,
+                            assumedMasterState: removeServerOnlyFields(doc.toJSON(true)) as any
                         });
                         if (!isAllowedChange) {
                             adapter.closeConnection(res, 403, 'Forbidden');
