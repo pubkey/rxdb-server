@@ -114,12 +114,11 @@ export function mergeServerDocumentFieldsMonad<RxDocType>(serverOnlyFields: stri
         clientDoc: RxDocType | RxDocumentData<RxDocType>,
         serverDoc?: RxDocType | RxDocumentData<RxDocType>
     ) => {
+        if (!clientDoc) {
+            return clientDoc;
+        }
         const ret = flatClone(clientDoc);
         if (!serverDoc) {
-            // Initialize server-only fields to null for new documents
-            useFields.forEach(field => {
-                (ret as any)[field] = null;
-            });
             return ret;
         }
         useFields.forEach(field => {

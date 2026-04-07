@@ -659,6 +659,54 @@ describe('endpoint-replication.test.ts', () => {
 
             await col.database.close();
         });
+        it('should replicate a new document from client to server when serverOnlyFields are set', async () => {
+            const serverCol = await humansCollection.create(0);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: serverCol.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addReplicationEndpoint({
+                name: randomToken(10),
+                collection: serverCol,
+                serverOnlyFields: ['lastName']
+            });
+            await server.start();
+
+            const clientCol = await humansCollection.createBySchema(humanDefault);
+            const url = 'http://localhost:' + port + '/' + endpoint.urlPath;
+            const replicationState = await replicateServer({
+                collection: clientCol,
+                replicationIdentifier: randomToken(10),
+                url,
+                headers,
+                live: true,
+                push: {},
+                pull: {},
+                eventSource: EventSource
+            });
+            ensureReplicationHasNoErrors(replicationState);
+            await replicationState.awaitInSync();
+
+            // insert a new document on the client
+            await clientCol.insert(schemaObjects.humanData('new-doc-test', 1));
+            await replicationState.awaitInSync();
+
+            // the new document should appear on the server
+            await waitUntil(async () => {
+                const docs = await serverCol.find().exec();
+                return docs.length === 1;
+            });
+
+            const serverDoc = await serverCol.findOne().exec(true);
+            assert.strictEqual(serverDoc.passportId, 'new-doc-test');
+
+            await replicationState.cancel();
+            await serverCol.database.close();
+            await clientCol.database.close();
+        });
         it('should keep serverOnlyFields on writes', async () => {
             const col = await humansCollection.create(1);
             const port = await nextPort();
