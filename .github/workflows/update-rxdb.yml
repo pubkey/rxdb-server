@@ -77,7 +77,7 @@ jobs:
         run: |
           CURRENT_HASH=$(node -e "
             const dep = require('./package.json').devDependencies.rxdb;
-            const match = dep.match(/#([a-f0-9]+)$/);
+            const match = dep.match(/\/archive\/([a-f0-9]+)\.tar\.gz$/);
             console.log(match ? match[1] : '');
           ")
           echo "commit=$CURRENT_HASH" >> "$GITHUB_OUTPUT"
@@ -91,7 +91,7 @@ jobs:
             const fs = require('fs');
             const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf-8'));
             pkg.peerDependencies.rxdb = '$TARGET';
-            pkg.devDependencies.rxdb = 'github:pubkey/rxdb#$COMMIT';
+            pkg.devDependencies.rxdb = 'https://github.com/pubkey/rxdb/archive/$COMMIT.tar.gz';
             fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n', 'utf-8');
           "
 
