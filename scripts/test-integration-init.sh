@@ -35,7 +35,7 @@ npm install
 npm install rxdb@$RXDB_VERSION
 npm install ./rxdb-server.tgz
 
-(cd ./node_modules/rxdb-server/ && npm i)
+(cd ./node_modules/rxdb-server/ && npm i --omit=dev)
 
 npm run build
 
