@@ -707,6 +707,71 @@ describe('endpoint-replication.test.ts', () => {
             await serverCol.database.close();
             await clientCol.database.close();
         });
+        it('should not return serverOnlyFields in push conflict responses', async () => {
+            const col = await humansCollection.create(1);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addReplicationEndpoint({
+                name: randomToken(10),
+                collection: col,
+                serverOnlyFields: ['lastName']
+            });
+            await server.start();
+
+            // get the current server doc
+            const serverDoc = await col.findOne().exec(true);
+            const docData = serverDoc.toJSON(true);
+            const primaryPath = col.schema.primaryPath;
+            const docId = (docData as any)[primaryPath];
+
+            // modify the server doc to create a conflict
+            await serverDoc.patch({ firstName: 'ServerUpdate' });
+
+            // push with stale assumedMasterState to trigger a conflict
+            const url = 'http://localhost:' + port + '/' + endpoint.urlPath + '/push';
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    ...headers,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify([{
+                    assumedMasterState: {
+                        [primaryPath]: docId,
+                        passportId: docData.passportId,
+                        firstName: docData.firstName,
+                        lastName: docData.lastName,
+                        age: docData.age,
+                        _deleted: false
+                    },
+                    newDocumentState: {
+                        [primaryPath]: docId,
+                        passportId: docData.passportId,
+                        firstName: 'ClientUpdate',
+                        age: docData.age,
+                        _deleted: false
+                    }
+                }])
+            });
+            const conflicts = await response.json();
+
+            // should have a conflict
+            assert.ok(conflicts.length > 0);
+
+            // conflict documents should NOT contain serverOnlyFields
+            conflicts.forEach((doc: RxDocumentData<HumanDocumentType>) => {
+                assert.strictEqual(typeof doc.lastName, 'undefined');
+                assert.strictEqual(typeof (doc as any)._rev, 'undefined');
+                assert.strictEqual(typeof (doc as any)._meta, 'undefined');
+            });
+
+            await col.database.close();
+        });
         it('should keep serverOnlyFields on writes', async () => {
             const col = await humansCollection.create(1);
             const port = await nextPort();
