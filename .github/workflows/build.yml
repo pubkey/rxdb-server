@@ -25,7 +25,10 @@ jobs:
 
       - name: install npm dependencies
         run: npm install
-      
+
+      - name: build rxdb from source
+        run: (cd node_modules/rxdb && npm run build)
+
       - name: build code
         run: npm run build
 
