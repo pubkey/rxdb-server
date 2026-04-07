@@ -174,14 +174,19 @@ describe('server.test.ts', () => {
             assert.strictEqual(result.private, 'barfoo');
             assert.strictEqual(result.id, 'foobar');
         });
-        it('should initialize server-only fields to null when serverDoc is undefined (new document)', () => {
+        it('should not add server-only fields when serverDoc is undefined (new document)', () => {
             const clientDoc = { id: 'foobar' };
             const result = mergeServerDocumentFieldsMonad<any>(['private'])(clientDoc, undefined);
 
-            assert.strictEqual(result.private, null);
+            assert.strictEqual('private' in result, false);
             assert.strictEqual(result.id, 'foobar');
             // Must not mutate the original
             assert.strictEqual('private' in clientDoc, false);
+        });
+        it('should return falsy clientDoc as-is without transforming it', () => {
+            const merge = mergeServerDocumentFieldsMonad<any>(['private']);
+            const result = merge(undefined as any, undefined);
+            assert.strictEqual(result, undefined);
         });
         it('should not create undefined properties when serverDoc lacks the field', () => {
             // Simulates: document was created via push without the server-only field,
