@@ -1,13 +1,16 @@
-name: Update RxDB Version
+name: Update RxDB Commit
 
 on:
   workflow_dispatch:
-  # Triggered by the rxdb release script via GitHub API:
+  schedule:
+    # Hourly check for new commits on rxdb master
+    - cron: '0 * * * *'
+  # Triggered by the rxdb repo via GitHub API on each push to master:
   # curl -X POST https://api.github.com/repos/pubkey/rxdb-server/dispatches \
   #   -H "Authorization: token <PAT>" \
-  #   -d '{"event_type":"rxdb-release"}'
+  #   -d '{"event_type":"rxdb-master-update"}'
   repository_dispatch:
-    types: [rxdb-release]
+    types: [rxdb-master-update]
 
 # Ensure only one instance runs at a time
 concurrency:
@@ -25,51 +28,37 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Get current rxdb version from package.json
+      - name: Get current rxdb commit from package.json
         id: current
         run: |
-          CURRENT_VERSION=$(node -e "console.log(require('./package.json').devDependencies.rxdb)")
-          echo "version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+          CURRENT=$(node -e "console.log(require('./package.json').devDependencies.rxdb)")
+          CURRENT_SHA="${CURRENT##*#}"
+          echo "spec=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "sha=$CURRENT_SHA" >> "$GITHUB_OUTPUT"
 
-      - name: Get latest and next rxdb versions from npm
-        id: npm
+      - name: Get latest rxdb master commit sha
+        id: latest
         run: |
-          LATEST_VERSION=$(npm view rxdb dist-tags.latest)
-          NEXT_VERSION=$(npm view rxdb dist-tags.next 2>/dev/null || echo "")
-          echo "latest=$LATEST_VERSION" >> "$GITHUB_OUTPUT"
-          echo "next=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
+          LATEST_SHA=$(curl -fsSL \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/pubkey/rxdb/commits/master \
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).sha))")
+          echo "sha=$LATEST_SHA" >> "$GITHUB_OUTPUT"
 
-      - name: Determine target version
+      - name: Determine whether to update
         id: target
         run: |
-          CURRENT="${{ steps.current.outputs.version }}"
-          LATEST="${{ steps.npm.outputs.latest }}"
-          NEXT="${{ steps.npm.outputs.next }}"
-
-          echo "Current: $CURRENT"
-          echo "Latest:  $LATEST"
-          echo "Next:    $NEXT"
-
-          # Collect non-empty versions and pick the highest using npx semver
-          VERSIONS="$LATEST"
-          if [ -n "$NEXT" ]; then
-            VERSIONS="$VERSIONS $NEXT"
-          fi
-
-          TARGET=$(npx -y semver $VERSIONS | tail -1)
-          echo "Target:  $TARGET"
-
-          if [ "$CURRENT" = "$TARGET" ]; then
+          if [ "${{ steps.current.outputs.sha }}" = "${{ steps.latest.outputs.sha }}" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
-          echo "version=$TARGET" >> "$GITHUB_OUTPUT"
 
       - name: Update package.json
         if: steps.target.outputs.changed == 'true'
         run: |
-          TARGET="${{ steps.target.outputs.version }}"
+          TARGET="github:pubkey/rxdb#${{ steps.latest.outputs.sha }}"
           node -e "
             const fs = require('fs');
             const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf-8'));
@@ -80,9 +69,10 @@ jobs:
       - name: Commit and push
         if: steps.target.outputs.changed == 'true'
         run: |
-          TARGET="${{ steps.target.outputs.version }}"
+          SHORT="${{ steps.latest.outputs.sha }}"
+          SHORT="${SHORT:0:7}"
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add package.json
-          git commit -m "chore: update rxdb to $TARGET"
+          git commit -m "chore: update rxdb to pubkey/rxdb@$SHORT"
           git push
