@@ -21,6 +21,7 @@ import {
     doesContainRegexQuerySelector,
     getAuthDataByRequest,
     getDocAllowedMatcher,
+    mergeServerDocumentFieldsMonad,
     removeServerOnlyFieldsMonad,
     setCors
 } from './helper.ts';
@@ -82,6 +83,7 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
             return changeValidator(authData, change);
         }
         const removeServerOnlyFields = removeServerOnlyFieldsMonad(this.serverOnlyFields);
+        const mergeServerDocumentFields = mergeServerDocumentFieldsMonad<RxDocType>(this.serverOnlyFields);
 
         this.server.adapter.post(this.server.serverApp, '/' + this.urlPath + '/query', async (req, res) => {
             ensureNotFalsy(adapter.getRequestBody(req), 'req body is empty');
@@ -217,7 +219,8 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
                     const id = (docData as any)[primaryPath];
                     const doc = docs.get(id);
                     if (!doc) {
-                        promises.push(this.collection.insert(docData).catch(err => onWriteError(err, docData)));
+                        const mergedDocData = mergeServerDocumentFields(docData, undefined);
+                        promises.push(this.collection.insert(mergedDocData).catch(err => onWriteError(err, mergedDocData)));
                     } else {
                         const isAllowed = this.changeValidator(authData, {
                             newDocumentState: removeServerOnlyFields(docData as any),
@@ -227,7 +230,8 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
                             adapter.closeConnection(res, 403, 'Forbidden');
                             return;
                         }
-                        promises.push(doc.patch(docData).catch(err => onWriteError(err, docData)));
+                        const mergedDocData = mergeServerDocumentFields(docData, doc.toJSON(true) as any);
+                        promises.push(doc.patch(mergedDocData).catch(err => onWriteError(err, mergedDocData)));
                     }
                 }
                 await Promise.all(promises);
@@ -259,8 +263,8 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
                         }
 
                         const isAllowedChange = this.changeValidator(authData, {
-                            newDocumentState: doc.toJSON(true) as any,
-                            assumedMasterState: doc.toJSON(true) as any
+                            newDocumentState: removeServerOnlyFields(doc.toJSON(true)) as any,
+                            assumedMasterState: removeServerOnlyFields(doc.toJSON(true)) as any
                         });
                         if (!isAllowedChange) {
                             adapter.closeConnection(res, 403, 'Forbidden');
