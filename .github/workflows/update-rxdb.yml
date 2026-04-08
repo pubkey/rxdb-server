@@ -25,10 +25,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Get current rxdb version from package.json
+      - name: Get current peer-deps rxdb version from package.json
         id: current
         run: |
-          CURRENT_VERSION=$(node -e "console.log(require('./package.json').devDependencies.rxdb)")
+          CURRENT_VERSION=$(node -e "console.log(require('./package.json').peerDependencies.rxdb)")
           echo "version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Get latest and next rxdb versions from npm
@@ -38,6 +38,12 @@ jobs:
           NEXT_VERSION=$(npm view rxdb dist-tags.next 2>/dev/null || echo "")
           echo "latest=$LATEST_VERSION" >> "$GITHUB_OUTPUT"
           echo "next=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Get latest commit hash from rxdb master
+        id: hash
+        run: |
+          COMMIT_HASH=$(git ls-remote https://github.com/pubkey/rxdb.git refs/heads/master | cut -f1)
+          echo "commit=$COMMIT_HASH" >> "$GITHUB_OUTPUT"
 
       - name: Determine target version
         id: target
@@ -66,23 +72,36 @@ jobs:
           fi
           echo "version=$TARGET" >> "$GITHUB_OUTPUT"
 
+      - name: Get current commit hash from package.json
+        id: current_hash
+        run: |
+          CURRENT_HASH=$(node -e "
+            const dep = require('./package.json').devDependencies.rxdb;
+            const match = dep.match(/\/archive\/([a-f0-9]+)\.tar\.gz$/);
+            console.log(match ? match[1] : '');
+          ")
+          echo "commit=$CURRENT_HASH" >> "$GITHUB_OUTPUT"
+
       - name: Update package.json
-        if: steps.target.outputs.changed == 'true'
+        if: steps.target.outputs.changed == 'true' || steps.hash.outputs.commit != steps.current_hash.outputs.commit
         run: |
           TARGET="${{ steps.target.outputs.version }}"
+          COMMIT="${{ steps.hash.outputs.commit }}"
           node -e "
             const fs = require('fs');
             const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf-8'));
-            pkg.devDependencies.rxdb = '$TARGET';
+            pkg.peerDependencies.rxdb = '$TARGET';
+            pkg.devDependencies.rxdb = 'https://github.com/pubkey/rxdb/archive/$COMMIT.tar.gz';
             fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n', 'utf-8');
           "
 
       - name: Commit and push
-        if: steps.target.outputs.changed == 'true'
+        if: steps.target.outputs.changed == 'true' || steps.hash.outputs.commit != steps.current_hash.outputs.commit
         run: |
           TARGET="${{ steps.target.outputs.version }}"
+          COMMIT="${{ steps.hash.outputs.commit }}"
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add package.json
-          git commit -m "chore: update rxdb to $TARGET"
+          git commit -m "chore: update rxdb to $TARGET (master: ${COMMIT:0:7})"
           git push

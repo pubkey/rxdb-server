@@ -38,13 +38,15 @@ jobs:
         with:
           path: |
             ~/.npm
-            ./node_modules
           key: ${{ runner.os }}-npm-core-x3-${{ hashFiles('**/package.json') }}
           restore-keys: |
             ${{ runner.os }}-npm-core-x3-
 
       - name: install npm dependencies
         run: npm install
+
+      - name: build rxdb from source
+        run: bash scripts/build-rxdb.sh
 
       - name: build
         run: npm run build
@@ -69,13 +71,14 @@ jobs:
         with:
           path: |
             ~/.npm
-            ./node_modules
             /tmp/.buildx-cache
           key: ${{ runner.os }}-npm-storage-dexie-x3-${{ hashFiles('**/package.json') }}
           restore-keys: |
             ${{ runner.os }}-npm-storage-dexie-x3-
 
       - run: npm install
+      - name: build rxdb from source
+        run: bash scripts/build-rxdb.sh
       - run: npm run test:integration:init
       - run: npm run test:integration:memory
 

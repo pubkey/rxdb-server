@@ -7,7 +7,7 @@ const fs = require('node:fs');
 const packageJSON = require('../package.json');
 
 
-packageJSON.version = packageJSON.devDependencies.rxdb;
+packageJSON.version = packageJSON.peerDependencies.rxdb;
 fs.writeFileSync('./package.json', JSON.stringify(packageJSON, null, 2), 'utf-8');
 
-console.log(packageJSON.devDependencies.rxdb);
+console.log(packageJSON.peerDependencies.rxdb);

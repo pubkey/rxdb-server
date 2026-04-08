@@ -27,12 +27,13 @@ jobs:
         with:
           path: |
             ~/.npm
-            ./node_modules
           key: ${{ runner.os }}-npm-release-x2-${{ hashFiles('**/package.json') }}
           restore-keys: |
             ${{ runner.os }}-npm-release-x2-
 
       - run: npm install
+      - name: build rxdb from source
+        run: bash scripts/build-rxdb.sh
       - run: npm run build
 
       - name: Get version
