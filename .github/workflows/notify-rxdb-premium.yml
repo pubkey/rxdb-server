@@ -1,0 +1,17 @@
+name: Notify rxdb-premium
+on:
+  push:
+    branches: [master]
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+
+
+      - name: Trigger rxdb-premium-dev dep update
+        run: |
+          curl -f -X POST https://api.github.com/repos/pubkey/rxdb-premium-dev/dispatches \
+            -H "Authorization: token ${{ secrets.RXDB_PREMIUM_VERSION_BUMP }}" \
+            -H "Accept: application/vnd.github+json" \
+            -d '{"event_type":"rxdb-release"}'
