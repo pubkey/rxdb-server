@@ -9,3 +9,7 @@ The code of the server plugins is in a different repository because:
 
 ## Issues
 The issue section of this repository is closed. Please make issues directly at the [RxDB Repo](https://github.com/pubkey/rxdb/issues).
+
+
+
+----
