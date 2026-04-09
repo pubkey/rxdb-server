@@ -1,0 +1,27 @@
+# Copy this workflow to pubkey/rxdb at .github/workflows/notify-rxdb-server.yml
+#
+# It fires on every push to the master branch and sends a repository_dispatch
+# event to pubkey/rxdb-server, which triggers the update-rxdb workflow.
+#
+# Required secret in pubkey/rxdb:
+#   RXDB_SERVER_TOKEN – a GitHub PAT (classic or fine-grained) with
+#   "contents: write" permission on pubkey/rxdb-server so it can create
+#   repository_dispatch events.
+
+name: Notify rxdb-server
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Dispatch update-rxdb event
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.RXDB_SERVER_TOKEN }}
+          repository: pubkey/rxdb-server
+          event-type: rxdb-master-push

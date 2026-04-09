@@ -1,16 +1,12 @@
 name: Update RxDB Version
 
 on:
-  schedule:
-    # Poll every hour for changes on the rxdb master branch
-    - cron: '0 * * * *'
   workflow_dispatch:
-  # Triggered by the rxdb release script via GitHub API:
-  # curl -X POST https://api.github.com/repos/pubkey/rxdb-server/dispatches \
-  #   -H "Authorization: token <PAT>" \
-  #   -d '{"event_type":"rxdb-release"}'
+  # Triggered by a webhook from the pubkey/rxdb repo.
+  # The sender workflow (.github/workflows/notify-rxdb-server.yml in pubkey/rxdb)
+  # fires on every push to master and sends a repository_dispatch event here.
   repository_dispatch:
-    types: [rxdb-release]
+    types: [rxdb-release, rxdb-master-push]
 
 # Ensure only one instance runs at a time
 concurrency:
