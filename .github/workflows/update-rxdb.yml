@@ -21,6 +21,7 @@ jobs:
 
     permissions:
       contents: write
+      pull-requests: write
 
     steps:
       - uses: actions/checkout@v6
@@ -44,6 +45,7 @@ jobs:
         run: |
           COMMIT_HASH=$(git ls-remote https://github.com/pubkey/rxdb.git refs/heads/master | cut -f1)
           echo "commit=$COMMIT_HASH" >> "$GITHUB_OUTPUT"
+          echo "short=${COMMIT_HASH:0:7}" >> "$GITHUB_OUTPUT"
 
       - name: Determine target version
         id: target
@@ -95,13 +97,19 @@ jobs:
             fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n', 'utf-8');
           "
 
-      - name: Commit and push
+      - name: Create Pull Request
         if: steps.target.outputs.changed == 'true' || steps.hash.outputs.commit != steps.current_hash.outputs.commit
-        run: |
-          TARGET="${{ steps.target.outputs.version }}"
-          COMMIT="${{ steps.hash.outputs.commit }}"
-          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add package.json
-          git commit -m "chore: update rxdb to $TARGET (master: ${COMMIT:0:7})"
-          git push
+        uses: peter-evans/create-pull-request@v7
+        with:
+          # A repo-scoped PAT is required so that the pull_request event
+          # triggers CI workflows.  The default GITHUB_TOKEN deliberately
+          # does NOT trigger downstream workflows (to prevent infinite loops).
+          token: ${{ secrets.GH_PAT }}
+          commit-message: "chore: update rxdb to ${{ steps.target.outputs.version }} (master: ${{ steps.hash.outputs.short }})"
+          branch: automated/update-rxdb
+          title: "chore: update rxdb to ${{ steps.target.outputs.version }}"
+          body: |
+            Automated update of RxDB dependency.
+
+            - Peer dependency version: `${{ steps.target.outputs.version }}`
+            - RxDB master commit: `${{ steps.hash.outputs.commit }}`
