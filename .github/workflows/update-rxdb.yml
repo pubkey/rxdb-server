@@ -1,6 +1,9 @@
 name: Update RxDB Version
 
 on:
+  schedule:
+    # Poll every hour for changes on the rxdb master branch
+    - cron: '0 * * * *'
   workflow_dispatch:
   # Triggered by the rxdb release script via GitHub API:
   # curl -X POST https://api.github.com/repos/pubkey/rxdb-server/dispatches \
