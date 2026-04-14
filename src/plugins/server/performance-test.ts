@@ -6,8 +6,7 @@
 
 import type {
     RxDatabase,
-    RxCollection,
-    RxStorage
+    RxCollection
 } from 'rxdb/plugins/core';
 import { randomToken } from 'rxdb/plugins/core';
 import type { RxServerAdapter } from './types.ts';
