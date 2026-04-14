@@ -222,6 +222,15 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
                         const mergedDocData = mergeServerDocumentFields(docData, undefined);
                         promises.push(this.collection.insert(mergedDocData).catch(err => onWriteError(err, mergedDocData)));
                     } else {
+                        // The user must also be allowed to access the existing document.
+                        // Without this check, a client could overwrite arbitrary
+                        // documents by sending a write whose new state matches the
+                        // queryModifier while targeting a foreign document's primary.
+                        const isExistingDocAllowed = docDataMatcherWrite(doc.toJSON(true) as any);
+                        if (!isExistingDocAllowed) {
+                            adapter.closeConnection(res, 403, 'Forbidden');
+                            return;
+                        }
                         const isAllowed = this.changeValidator(authData, {
                             newDocumentState: removeServerOnlyFields(docData as any),
                             assumedMasterState: removeServerOnlyFields(doc.toJSON(true))
