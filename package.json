@@ -131,7 +131,7 @@
     "minify-all-js": "0.1.9",
     "mocha": "11.7.5",
     "rimraf": "6.1.3",
-    "rxdb": "https://github.com/pubkey/rxdb/archive/d5325c8e89cdd9a6f6f115aae891b3c1ed9d56cf.tar.gz",
+    "rxdb": "https://github.com/pubkey/rxdb/archive/cede5cab81612006993f24f88913f310f64e31a8.tar.gz",
     "rxjs": "7.8.2",
     "ts-loader": "9.5.7",
     "ts-node": "10.9.2",
