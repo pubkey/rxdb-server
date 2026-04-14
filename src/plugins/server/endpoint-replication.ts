@@ -178,7 +178,7 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
         });
         this.server.adapter.get(this.server.serverApp, '/' + this.urlPath + '/pullStream', async (req, res) => {
 
-            const authData = await getAuthDataByRequest<AuthType, any, any>(this.server, req, res);
+            let authData = await getAuthDataByRequest<AuthType, any, any>(this.server, req, res);
             if (!authData) { return; }
 
             adapter.setSSEHeaders(res);
@@ -187,15 +187,21 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
                 mergeMap(async (changes) => {
                     /**
                      * The auth-data might be expired
-                     * so we re-run the auth parsing each time
+                     * so we re-run the auth parsing when required
                      * before emitting an event.
+                     *
+                     * To avoid calling the (possibly expensive) auth handler
+                     * on every single emission, we respect the `validUntil`
+                     * field of the previously returned auth data and only
+                     * re-run the handler once it has actually expired.
                      */
-                    let authData: RxServerAuthData<AuthType>;
-                    try {
-                        authData = await server.authHandler(adapter.getRequestHeaders(req));
-                    } catch (err) {
-                        adapter.closeConnection(res, 401, 'Unauthorized');
-                        return null;
+                    if (!authData || Date.now() >= (authData as RxServerAuthData<AuthType>).validUntil) {
+                        try {
+                            authData = await server.authHandler(adapter.getRequestHeaders(req));
+                        } catch (err) {
+                            adapter.closeConnection(res, 401, 'Unauthorized');
+                            return null;
+                        }
                     }
 
                     if (changes === 'RESYNC') {

@@ -6,7 +6,8 @@ import {
     randomToken
 } from 'rxdb/plugins/core';
 import {
-    createRxServer
+    createRxServer,
+    type RxServerAuthHandler
 } from '../../plugins/server';
 import {
     createRestClient
@@ -21,6 +22,7 @@ import { assertThrows, waitUntil } from 'async-test-util';
 
 import config from './config.ts';
 import {
+    AuthType,
     authHandler,
     headers,
     queryModifier
@@ -294,6 +296,60 @@ describe('endpoint-rest.test.ts', () => {
             const last = ensureNotFalsy(lastOfArray(emitted));
             assert.strictEqual(last[0].passportId, 'only-matching');
             assert.strictEqual(last.length, 1);
+
+            await col.database.close();
+        });
+        it('should not re-run the authHandler on every emission while auth is still valid (respect validUntil)', async () => {
+            const col = await humansCollection.create(0);
+            const port = await nextPort();
+            let authCallCount = 0;
+            const countingAuthHandler: RxServerAuthHandler<AuthType> = (requestHeaders) => {
+                if (requestHeaders.authorization === 'is-valid') {
+                    authCallCount++;
+                    return {
+                        // valid for 100 seconds into the future
+                        validUntil: Date.now() + 100000,
+                        data: {
+                            userid: requestHeaders.userid as string
+                        }
+                    };
+                } else {
+                    throw new Error('auth not valid');
+                }
+            };
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler: countingAuthHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            const emitted: HumanDocumentType[][] = [];
+            client.observeQuery({}).subscribe(result => emitted.push(result));
+            await waitUntil(() => emitted.length === 1);
+
+            // Trigger several changes so the server pipes new emissions through the SSE stream.
+            const changeCount = 5;
+            for (let i = 0; i < changeCount; i++) {
+                await col.insert(schemaObjects.humanData('doc' + i, 1, headers.userid));
+            }
+            await waitUntil(() => emitted.length === changeCount + 1);
+
+            // The authHandler must not be re-run while the returned validUntil
+            // is still in the future. A well-behaved server should call it only
+            // for the initial request, not once per emitted change.
+            assert.ok(
+                authCallCount <= 2,
+                'auth handler was called ' + authCallCount + ' times; ' +
+                'expected <= 2 while validUntil is in the future'
+            );
 
             await col.database.close();
         });

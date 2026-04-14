@@ -139,12 +139,19 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
                      * The auth-data might be expired
                      * so we re-run the auth parsing each time
                      * before emitting the new results.
+                     *
+                     * To avoid calling the (possibly expensive) auth handler
+                     * on every single emission, we respect the `validUntil`
+                     * field of the previously returned auth data and only
+                     * re-run the handler once it has actually expired.
                      */
-                    try {
-                        authData = await server.authHandler(adapter.getRequestHeaders(req)) as any;
-                    } catch (err) {
-                        adapter.closeConnection(res, 401, 'Unauthorized');
-                        return null;
+                    if (!authData || Date.now() >= authData.validUntil) {
+                        try {
+                            authData = await server.authHandler(adapter.getRequestHeaders(req)) as any;
+                        } catch (err) {
+                            adapter.closeConnection(res, 401, 'Unauthorized');
+                            return null;
+                        }
                     }
 
                     return resultData;
