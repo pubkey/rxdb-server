@@ -219,12 +219,20 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
                     const id = (docData as any)[primaryPath];
                     const doc = docs.get(id);
                     if (!doc) {
+                        const isAllowed = this.changeValidator(authData, {
+                            newDocumentState: removeServerOnlyFields(docData as any) as any,
+                            assumedMasterState: undefined
+                        });
+                        if (!isAllowed) {
+                            adapter.closeConnection(res, 403, 'Forbidden');
+                            return;
+                        }
                         const mergedDocData = mergeServerDocumentFields(docData, undefined);
                         promises.push(this.collection.insert(mergedDocData).catch(err => onWriteError(err, mergedDocData)));
                     } else {
                         const isAllowed = this.changeValidator(authData, {
-                            newDocumentState: removeServerOnlyFields(docData as any),
-                            assumedMasterState: removeServerOnlyFields(doc.toJSON(true))
+                            newDocumentState: removeServerOnlyFields(docData as any) as any,
+                            assumedMasterState: removeServerOnlyFields(doc.toJSON(true)) as any
                         });
                         if (!isAllowed) {
                             adapter.closeConnection(res, 403, 'Forbidden');

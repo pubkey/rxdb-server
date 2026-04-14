@@ -460,6 +460,41 @@ describe('endpoint-rest.test.ts', () => {
             await col.database.close();
 
         });
+        it('should not accept an insert if changeValidator says no', async () => {
+            // start with an empty collection so the client write is an insert
+            const col = await humansCollection.create(0);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                changeValidator: () => false
+            });
+            await server.start();
+            const client = createRestClient<HumanDocumentType>(
+                'http://localhost:' + port + '/' + endpoint.urlPath,
+                headers
+            );
+
+            const newDoc = schemaObjects.humanData('insert-forbidden', 1, headers.userid);
+
+            await assertThrows(
+                () => client.set([newDoc]),
+                Error,
+                'error'
+            );
+
+            // the new document must NOT have been inserted
+            const docsAfter = await col.find().exec();
+            assert.strictEqual(docsAfter.length, 0);
+
+            await col.database.close();
+        });
         it('should throw an error via handleError when the server rejects a set', async () => {
             const col = await humansCollection.create(1);
             const docs = await col.find().exec();
