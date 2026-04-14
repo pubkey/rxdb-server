@@ -119,6 +119,12 @@ export function mergeServerDocumentFieldsMonad<RxDocType>(serverOnlyFields: stri
         }
         const ret = flatClone(clientDoc);
         if (!serverDoc) {
+            // New document: the client must not be trusted for server-only
+            // fields. Drop any values the client included so they are not
+            // stored (and not written into schema indexes).
+            useFields.forEach(field => {
+                delete (ret as any)[field];
+            });
             return ret;
         }
         useFields.forEach(field => {

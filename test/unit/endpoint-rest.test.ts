@@ -3,7 +3,8 @@ import assert from 'assert';
 import {
     ensureNotFalsy,
     lastOfArray,
-    randomToken
+    randomToken,
+    RxJsonSchema
 } from 'rxdb/plugins/core';
 import {
     createRxServer
@@ -732,6 +733,82 @@ describe('endpoint-rest.test.ts', () => {
 
             const docsAfter = await col.find().exec();
             assert.strictEqual(docsAfter.length, 0);
+
+            await col.database.close();
+        });
+        it('should not store client-provided serverOnlyFields on new documents via /set when an index is defined on that field', async () => {
+            /**
+             * Reproduces a bug where a client can set the value of a
+             * `serverOnlyFields` entry on a new document via the REST `/set`
+             * endpoint. When that field is also part of a schema index
+             * (a "server-only index"), the server ends up storing the
+             * client-provided value and indexing it.
+             *
+             * The server must always treat serverOnlyFields as server-managed,
+             * regardless of whether the document is new or being updated.
+             */
+            const schema: RxJsonSchema<HumanDocumentType> = {
+                title: 'human schema with server-only indexed field',
+                version: 0,
+                keyCompression: false,
+                primaryKey: 'passportId',
+                type: 'object',
+                properties: {
+                    passportId: { type: 'string', maxLength: 100 },
+                    firstName: { type: 'string', maxLength: 100 },
+                    lastName: { type: 'string', maxLength: 100 },
+                    age: {
+                        type: 'integer',
+                        minimum: 0,
+                        maximum: 150,
+                        multipleOf: 1,
+                        default: 20
+                    }
+                },
+                required: ['passportId'],
+                indexes: ['lastName']
+            };
+            const col = await humansCollection.createBySchema<HumanDocumentType>(schema);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                serverOnlyFields: ['lastName']
+            });
+            await server.start();
+
+            const client = createRestClient<HumanDocumentType>(
+                'http://localhost:' + port + '/' + endpoint.urlPath,
+                headers
+            );
+
+            // Client creates a new doc and includes a value for the
+            // server-only indexed field. This must not be trusted by the server.
+            const hackValue = 'ClientWrittenIndexedValue';
+            await client.set([{
+                passportId: 'new-doc-1',
+                firstName: 'Alice',
+                lastName: hackValue,
+                age: 30
+            }]);
+
+            // The client-provided value for the server-only indexed field
+            // must not be persisted.
+            const docAfter = await col.findOne('new-doc-1').exec(true);
+            assert.notStrictEqual(
+                docAfter.lastName,
+                hackValue,
+                'server must not store client-provided value for server-only indexed field on new docs'
+            );
+            // The non-server-only fields are stored as expected.
+            assert.strictEqual(docAfter.firstName, 'Alice');
+            assert.strictEqual(docAfter.age, 30);
 
             await col.database.close();
         });

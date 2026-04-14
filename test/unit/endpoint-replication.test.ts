@@ -660,7 +660,10 @@ describe('endpoint-replication.test.ts', () => {
             await col.database.close();
         });
         it('should replicate a new document from client to server when serverOnlyFields are set', async () => {
-            const serverCol = await humansCollection.create(0);
+            // The server must not require fields that are marked as
+            // `serverOnlyFields` because the client must not be trusted to
+            // provide values for those fields on new documents.
+            const serverCol = await humansCollection.createBySchema(humanDefault);
             const port = await nextPort();
             const server = await createRxServer({
                 adapter: TEST_SERVER_ADAPTER,
@@ -690,7 +693,9 @@ describe('endpoint-replication.test.ts', () => {
             ensureReplicationHasNoErrors(replicationState);
             await replicationState.awaitInSync();
 
-            // insert a new document on the client
+            // insert a new document on the client. The client doc happens to
+            // include the `lastName` server-only field, but the server must
+            // not trust that value.
             await clientCol.insert(schemaObjects.humanData('new-doc-test', 1));
             await replicationState.awaitInSync();
 
