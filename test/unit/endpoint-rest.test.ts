@@ -14,7 +14,8 @@ import {
 import {
     schemaObjects,
     humansCollection,
-    HumanDocumentType
+    HumanDocumentType,
+    humanDefault
 } from 'rxdb/plugins/test-utils';
 import { nextPort } from './test-helpers.ts';
 import { assertThrows, waitUntil } from 'async-test-util';
@@ -732,6 +733,44 @@ describe('endpoint-rest.test.ts', () => {
 
             const docsAfter = await col.find().exec();
             assert.strictEqual(docsAfter.length, 0);
+
+            await col.database.close();
+        });
+        it('should not allow clients to set serverOnlyFields when inserting NEW documents via /set', async () => {
+            // Use humanDefault schema where lastName is optional so the insert
+            // with lastName stripped is still schema-valid.
+            const col = await humansCollection.createBySchema(humanDefault);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                serverOnlyFields: ['lastName']
+            });
+            await server.start();
+
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            // The client crafts a NEW document with the server-only field set.
+            const newDoc: HumanDocumentType = schemaObjects.humanData('new-doc-restset', 1);
+            newDoc.lastName = 'HackedValue';
+
+            await client.set([newDoc]);
+
+            // The server-only field must NOT have been written with the
+            // client-provided value when the document is created.
+            const docAfter = await col.findOne('new-doc-restset').exec(true);
+            assert.strictEqual(docAfter.firstName, newDoc.firstName);
+            assert.notStrictEqual(
+                docAfter.lastName,
+                'HackedValue',
+                'Client must not be able to set a server-only field on document creation via /set'
+            );
 
             await col.database.close();
         });

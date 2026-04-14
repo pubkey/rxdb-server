@@ -86,6 +86,28 @@ export function docContainsServerOnlyFields(
     return has;
 }
 
+/**
+ * Returns a function that strips the given server-only fields from a client
+ * document. This is used when accepting a NEW document from a client write to
+ * make sure that server-only fields cannot be populated by the client.
+ *
+ * Unlike {@link removeServerOnlyFieldsMonad} this does not assign undefined to
+ * RxDB internal meta fields (`_meta`, `_rev`, `_attachments`) so the result can
+ * be safely passed to `RxCollection.insert()`.
+ */
+export function stripServerOnlyFieldsMonad<RxDocType>(serverOnlyFields: string[]) {
+    if (serverOnlyFields.length === 0) {
+        return (docData: RxDocType | RxDocumentData<RxDocType>) => docData;
+    }
+    return (docData: RxDocType | RxDocumentData<RxDocType>) => {
+        const ret: any = flatClone(docData);
+        for (let i = 0; i < serverOnlyFields.length; i++) {
+            delete ret[serverOnlyFields[i]];
+        }
+        return ret;
+    };
+}
+
 export function removeServerOnlyFieldsMonad<RxDocType>(serverOnlyFields: string[]) {
     const serverOnlyFieldsStencil: any = {
         _meta: undefined,
