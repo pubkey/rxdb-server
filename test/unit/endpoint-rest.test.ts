@@ -460,6 +460,52 @@ describe('endpoint-rest.test.ts', () => {
             await col.database.close();
 
         });
+        it('should not allow overwriting an existing document that does not match the queryModifier', async () => {
+            const col = await humansCollection.create(0);
+            // seed a document that belongs to another user ('bob', not the authenticated 'alice')
+            await col.insert(schemaObjects.humanData('target-doc', 42, 'bob'));
+
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                queryModifier
+            });
+            await server.start();
+
+            // Client is authenticated as 'alice' (see headers.userid).
+            // queryModifier restricts so this user only owns docs with firstName='alice'.
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            // Send a write whose new document state looks like it belongs to 'alice',
+            // but whose primary key collides with the existing doc owned by 'bob'.
+            const hijackDoc: HumanDocumentType = {
+                passportId: 'target-doc',
+                firstName: 'alice',
+                lastName: 'hijacker',
+                age: 99
+            };
+
+            await assertThrows(
+                () => client.set([hijackDoc]),
+                Error,
+                'error'
+            );
+
+            // Verify the original document still belongs to bob
+            const docAfter = await col.findOne('target-doc').exec(true);
+            assert.strictEqual(docAfter.firstName, 'bob');
+            assert.strictEqual(docAfter.age, 42);
+            assert.notStrictEqual(docAfter.lastName, 'hijacker');
+
+            await col.database.close();
+        });
         it('should throw an error via handleError when the server rejects a set', async () => {
             const col = await humansCollection.create(1);
             const docs = await col.find().exec();
