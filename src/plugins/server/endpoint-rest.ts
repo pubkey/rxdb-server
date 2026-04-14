@@ -219,6 +219,15 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
                     const id = (docData as any)[primaryPath];
                     const doc = docs.get(id);
                     if (!doc) {
+                        // For new document inserts, the client must not be able to set
+                        // values for server-only fields. On updates mergeServerDocumentFields
+                        // preserves the stored server-only value, but on inserts there is no
+                        // server-side document to fall back on, so any client-supplied value
+                        // for a server-only field would otherwise be stored as-is.
+                        if (docContainsServerOnlyFields(serverOnlyFields, docData)) {
+                            adapter.closeConnection(res, 403, 'Forbidden');
+                            return;
+                        }
                         const mergedDocData = mergeServerDocumentFields(docData, undefined);
                         promises.push(this.collection.insert(mergedDocData).catch(err => onWriteError(err, mergedDocData)));
                     } else {

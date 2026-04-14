@@ -771,5 +771,43 @@ describe('endpoint-rest.test.ts', () => {
             assert.strictEqual(docAfter.lastName, lastNameBefore);
             await col.database.close();
         });
+        it('should not allow clients to set serverOnlyFields on new document inserts via /set', async () => {
+            const col = await humansCollection.create(0);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                serverOnlyFields: ['lastName']
+            });
+            await server.start();
+
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            // Client attempts to insert a NEW document and include a server-only field value.
+            // The server must not store the client-provided value for the server-only field.
+            const hackedValue = 'HackedValue';
+            const newDoc: HumanDocumentType = {
+                passportId: 'new-insert-test',
+                firstName: 'Alice',
+                lastName: hackedValue,
+                age: 25
+            };
+
+            await client.set([newDoc]).catch(() => { /* request may be rejected */ });
+
+            const stored = await col.findOne().exec();
+            // The client's value for the server-only field must not be stored.
+            if (stored) {
+                assert.notStrictEqual(stored.lastName, hackedValue);
+            }
+
+            await col.database.close();
+        });
     });
 });
