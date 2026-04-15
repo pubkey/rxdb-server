@@ -6,6 +6,7 @@ export * from './types.ts';
 export * from './endpoint-replication.ts';
 export * from './endpoint-rest.ts';
 export * from './helper.ts';
+export * from './performance-test.ts';
 
 export async function createRxServer<ServerAdapterType, AuthType>(
     options: RxServerOptions<ServerAdapterType, AuthType>
