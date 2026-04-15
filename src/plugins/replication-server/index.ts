@@ -93,7 +93,7 @@ export function replicateServer<RxDocType>(
             async handler(checkpointOrNull, batchSize) {
                 const lwt = checkpointOrNull && checkpointOrNull.lwt ? checkpointOrNull.lwt : 0;
                 const id = checkpointOrNull && checkpointOrNull.id ? checkpointOrNull.id : '';
-                const url = options.url + `/pull?lwt=${lwt}&id=${id}&limit=${batchSize}`;
+                const url = options.url + `/pull?lwt=${lwt}&id=${encodeURIComponent(id)}&limit=${batchSize}`;
                 const response = await fetch(url, {
                     method: 'GET',
                     credentials: 'include',
