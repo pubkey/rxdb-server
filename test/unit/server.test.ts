@@ -106,6 +106,58 @@ describe('server.test.ts', () => {
             server.close();
             col.database.close();
         });
+        it('should not combine Access-Control-Allow-Origin: * with Access-Control-Allow-Credentials: true', async () => {
+            // When no cors option is provided, the server defaults to '*'.
+            // Per the CORS spec, the wildcard '*' must NOT be combined with
+            // Access-Control-Allow-Credentials: true, because browsers reject
+            // such responses for credentialed (cookie/auth-header) requests.
+            const port = await nextPort();
+            const col = await humansCollection.create(0);
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+                // no cors -> defaults to '*'
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+            });
+            await server.start();
+
+            const url = `http://localhost:${port}/${endpoint.urlPath}/query`;
+            // Simulate a browser preflight request from a cross-origin client.
+            const preflightRes = await fetch(url, {
+                method: 'OPTIONS',
+                headers: {
+                    'Origin': 'http://example.com',
+                    'Access-Control-Request-Method': 'POST',
+                    'Access-Control-Request-Headers': 'content-type'
+                }
+            });
+
+            const allowOrigin = preflightRes.headers.get('access-control-allow-origin');
+            const allowCredentials = preflightRes.headers.get('access-control-allow-credentials');
+
+            // The rxdb-server always sends Access-Control-Allow-Credentials: true
+            // (see the `credentials: true` in the express adapter CORS config), so
+            // the only valid values for Access-Control-Allow-Origin are a concrete
+            // origin or the reflected request origin - NEVER '*'.
+            assert.strictEqual(
+                allowCredentials,
+                'true',
+                'Expected Access-Control-Allow-Credentials to be true'
+            );
+            assert.notStrictEqual(
+                allowOrigin,
+                '*',
+                'Invalid CORS response: cannot combine Access-Control-Allow-Origin: * with Access-Control-Allow-Credentials: true'
+            );
+
+            await server.close();
+            await col.database.close();
+        });
         it('should add multiple endpoints', async () => {
             const port = await nextPort();
             const col = await humansCollection.create(0);
