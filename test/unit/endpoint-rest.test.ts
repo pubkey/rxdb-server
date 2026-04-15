@@ -519,6 +519,56 @@ describe('endpoint-rest.test.ts', () => {
 
             await col.database.close();
         });
+        it('should not allow overwriting a document the user does not own', async () => {
+            const col = await humansCollection.create(0);
+
+            // Insert a document owned by another user (bob).
+            const bobDoc = await col.insert(schemaObjects.humanData('bob-doc', 30, 'bob'));
+            const bobLastNameBefore = bobDoc.lastName;
+            const bobAgeBefore = bobDoc.age;
+
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                queryModifier
+            });
+            await server.start();
+
+            // Alice connects and tries to take over bob's document by sending a
+            // write with bob's passportId but alice's firstName so it passes the
+            // queryModifier check.
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            const maliciousDoc: HumanDocumentType = {
+                passportId: 'bob-doc',
+                firstName: headers.userid,
+                lastName: 'hacked',
+                age: 99
+            };
+
+            let errorThrown = false;
+            try {
+                await client.set([maliciousDoc]);
+            } catch (err) {
+                errorThrown = true;
+            }
+            assert.ok(errorThrown, 'server must reject the overwrite attempt');
+
+            // Bob's document must still be intact.
+            const bobDocAfter = await col.findOne('bob-doc').exec(true);
+            assert.strictEqual(bobDocAfter.firstName, 'bob');
+            assert.strictEqual(bobDocAfter.lastName, bobLastNameBefore);
+            assert.strictEqual(bobDocAfter.age, bobAgeBefore);
+
+            await col.database.close();
+        });
     });
     describe('/delete', () => {
         it('should delete the documents', async () => {
