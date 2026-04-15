@@ -588,6 +588,54 @@ describe('endpoint-replication.test.ts', () => {
             clientCol.database.close();
         });
     });
+    describe('special characters in primary keys', () => {
+        it('should replicate documents whose primary key contains url-unsafe characters', async function () {
+            this.timeout(8000);
+
+            const col = await humansCollection.create(0);
+            // passport ids that contain characters which are relevant for URL query parsing.
+            await col.insert(schemaObjects.humanData('first-doc'));
+            await col.insert(schemaObjects.humanData('second&doc'));
+
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addReplicationEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+
+            const clientCol = await humansCollection.create(0);
+            const url = 'http://localhost:' + port + '/' + endpoint.urlPath;
+            const replicationState = await replicateServer<HumanDocumentType>({
+                collection: clientCol,
+                replicationIdentifier: randomToken(10),
+                url,
+                headers,
+                live: false,
+                push: {},
+                // use batchSize=1 so the checkpoint id containing '&'
+                // is actually sent back to the server on a subsequent pull.
+                pull: { batchSize: 1 },
+                eventSource: EventSource
+            });
+            ensureReplicationHasNoErrors(replicationState);
+            await replicationState.awaitInSync();
+
+            const clientDocs = await clientCol.find().exec();
+            const clientIds = clientDocs.map(d => d.passportId).sort();
+            assert.deepStrictEqual(clientIds, ['first-doc', 'second&doc']);
+
+            await replicationState.cancel();
+            await col.database.close();
+            await clientCol.database.close();
+        });
+    });
     describe('.serverOnlyFields', () => {
         it('should not return serverOnlyFields to /pull requests', async () => {
             const col = await humansCollection.create(3);

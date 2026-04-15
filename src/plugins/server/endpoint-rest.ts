@@ -23,7 +23,8 @@ import {
     getDocAllowedMatcher,
     mergeServerDocumentFieldsMonad,
     removeServerOnlyFieldsMonad,
-    setCors
+    setCors,
+    stripServerOnlyFieldsMonad
 } from './helper.ts';
 
 
@@ -84,6 +85,7 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
         }
         const removeServerOnlyFields = removeServerOnlyFieldsMonad(this.serverOnlyFields);
         const mergeServerDocumentFields = mergeServerDocumentFieldsMonad<RxDocType>(this.serverOnlyFields);
+        const stripServerOnlyFields = stripServerOnlyFieldsMonad<RxDocType>(this.serverOnlyFields);
 
         this.server.adapter.post(this.server.serverApp, '/' + this.urlPath + '/query', async (req, res) => {
             ensureNotFalsy(adapter.getRequestBody(req), 'req body is empty');
@@ -219,9 +221,26 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
                     const id = (docData as any)[primaryPath];
                     const doc = docs.get(id);
                     if (!doc) {
-                        const mergedDocData = mergeServerDocumentFields(docData, undefined);
+                        // Strip server-only fields from the client doc before
+                        // inserting. Without this, a client could populate
+                        // server-only ("readonly") fields when creating a new
+                        // document via /set, which contradicts the documented
+                        // behavior that clients cannot do writes where one of
+                        // the serverOnlyFields is set.
+                        const mergedDocData = stripServerOnlyFields(
+                            mergeServerDocumentFields(docData, undefined) as RxDocType
+                        );
                         promises.push(this.collection.insert(mergedDocData).catch(err => onWriteError(err, mergedDocData)));
                     } else {
+                        // The user must also be allowed to access the existing document.
+                        // Without this check, a client could overwrite arbitrary
+                        // documents by sending a write whose new state matches the
+                        // queryModifier while targeting a foreign document's primary.
+                        const isExistingDocAllowed = docDataMatcherWrite(doc.toJSON(true) as any);
+                        if (!isExistingDocAllowed) {
+                            adapter.closeConnection(res, 403, 'Forbidden');
+                            return;
+                        }
                         const isAllowed = this.changeValidator(authData, {
                             newDocumentState: removeServerOnlyFields(docData as any),
                             assumedMasterState: removeServerOnlyFields(doc.toJSON(true))

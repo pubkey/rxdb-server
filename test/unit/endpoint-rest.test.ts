@@ -14,7 +14,8 @@ import {
 import {
     schemaObjects,
     humansCollection,
-    HumanDocumentType
+    HumanDocumentType,
+    humanDefault
 } from 'rxdb/plugins/test-utils';
 import { nextPort } from './test-helpers.ts';
 import { assertThrows, waitUntil } from 'async-test-util';
@@ -518,6 +519,56 @@ describe('endpoint-rest.test.ts', () => {
 
             await col.database.close();
         });
+        it('should not allow overwriting a document the user does not own', async () => {
+            const col = await humansCollection.create(0);
+
+            // Insert a document owned by another user (bob).
+            const bobDoc = await col.insert(schemaObjects.humanData('bob-doc', 30, 'bob'));
+            const bobLastNameBefore = bobDoc.lastName;
+            const bobAgeBefore = bobDoc.age;
+
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                queryModifier
+            });
+            await server.start();
+
+            // Alice connects and tries to take over bob's document by sending a
+            // write with bob's passportId but alice's firstName so it passes the
+            // queryModifier check.
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            const maliciousDoc: HumanDocumentType = {
+                passportId: 'bob-doc',
+                firstName: headers.userid,
+                lastName: 'hacked',
+                age: 99
+            };
+
+            let errorThrown = false;
+            try {
+                await client.set([maliciousDoc]);
+            } catch (err) {
+                errorThrown = true;
+            }
+            assert.ok(errorThrown, 'server must reject the overwrite attempt');
+
+            // Bob's document must still be intact.
+            const bobDocAfter = await col.findOne('bob-doc').exec(true);
+            assert.strictEqual(bobDocAfter.firstName, 'bob');
+            assert.strictEqual(bobDocAfter.lastName, bobLastNameBefore);
+            assert.strictEqual(bobDocAfter.age, bobAgeBefore);
+
+            await col.database.close();
+        });
     });
     describe('/delete', () => {
         it('should delete the documents', async () => {
@@ -732,6 +783,44 @@ describe('endpoint-rest.test.ts', () => {
 
             const docsAfter = await col.find().exec();
             assert.strictEqual(docsAfter.length, 0);
+
+            await col.database.close();
+        });
+        it('should not allow clients to set serverOnlyFields when inserting NEW documents via /set', async () => {
+            // Use humanDefault schema where lastName is optional so the insert
+            // with lastName stripped is still schema-valid.
+            const col = await humansCollection.createBySchema(humanDefault);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                serverOnlyFields: ['lastName']
+            });
+            await server.start();
+
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            // The client crafts a NEW document with the server-only field set.
+            const newDoc: HumanDocumentType = schemaObjects.humanData('new-doc-restset', 1);
+            newDoc.lastName = 'HackedValue';
+
+            await client.set([newDoc]);
+
+            // The server-only field must NOT have been written with the
+            // client-provided value when the document is created.
+            const docAfter = await col.findOne('new-doc-restset').exec(true);
+            assert.strictEqual(docAfter.firstName, newDoc.firstName);
+            assert.notStrictEqual(
+                docAfter.lastName,
+                'HackedValue',
+                'Client must not be able to set a server-only field on document creation via /set'
+            );
 
             await col.database.close();
         });

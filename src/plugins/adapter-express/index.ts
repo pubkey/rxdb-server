@@ -16,8 +16,17 @@ export const RxServerAdapterExpress: RxServerAdapter<Express, Request, Response>
         return app;
     },
     setCors(serverApp, path, cors) {
+        /**
+         * Per the CORS spec, `Access-Control-Allow-Origin: *` cannot be combined
+         * with `Access-Control-Allow-Credentials: true` - browsers reject such
+         * responses on credentialed requests. When the caller opted into the
+         * '*' default, reflect the request origin back instead (via `origin: true`),
+         * which keeps the "allow from anywhere" semantics while staying compatible
+         * with credentials.
+         */
+        const originOption: expressCors.CorsOptions['origin'] = cors === '*' ? true : cors;
         serverApp.use('/' + path + '/*splat', expressCors({
-            origin: cors,
+            origin: originOption,
             // some legacy browsers (IE11, various SmartTVs) choke on 204
             optionsSuccessStatus: 200,
             credentials: true
