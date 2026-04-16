@@ -240,9 +240,9 @@ describe('server.test.ts', () => {
             const result = merge(undefined as any, undefined);
             assert.strictEqual(result, undefined);
         });
-        it('should not create undefined properties when serverDoc lacks the field', () => {
+        it('should not add the field when serverDoc lacks it (new-doc-on-server)', () => {
             // Simulates: document was created via push without the server-only field,
-            // stored in DB without it, then a subsequent push references it as serverDoc
+            // stored in DB without it, then a subsequent push references it as serverDoc.
             const serverDoc: any = {
                 _attachments: {},
                 _deleted: false,
@@ -254,12 +254,28 @@ describe('server.test.ts', () => {
             const clientDoc = { id: 'foobar' };
             const result = mergeServerDocumentFieldsMonad<any>(['private'])(clientDoc, serverDoc);
 
-            // Must be null, not undefined
-            assert.strictEqual(result.private, null);
-            // Must survive JSON roundtrip (undefined would be stripped)
-            assert.strictEqual(JSON.parse(JSON.stringify(result)).private, null);
+            // Must be absent so the merged doc matches the stored master state
+            // during masterWrite's isEqual check — a `null` or `undefined` value
+            // would be an extra key and would produce a false conflict.
+            assert.strictEqual('private' in result, false);
         });
-        it('should not cause false conflicts with deepEqual when server-only field is missing from stored doc', () => {
+        it('should strip client-sent values for server-only fields missing on serverDoc', () => {
+            // A malicious or misconfigured client might send a value for a server-only
+            // field on a document that does not have that field server-side. The merge
+            // must drop the client's value so it cannot be persisted.
+            const serverDoc: any = {
+                _attachments: {},
+                _deleted: false,
+                _meta: { lwt: 2000 },
+                _rev: '1-rev',
+                id: 'foobar',
+            };
+            const clientDoc = { id: 'foobar', private: 'hacked' };
+            const result = mergeServerDocumentFieldsMonad<any>(['private'])(clientDoc, serverDoc);
+
+            assert.strictEqual('private' in result, false);
+        });
+        it('should not produce extra keys when serverDoc is missing the field (no false conflict)', () => {
             const merge = mergeServerDocumentFieldsMonad<any>(['private']);
 
             const storedDoc: any = { id: 'foobar', name: 'test', _deleted: false };
@@ -271,17 +287,12 @@ describe('server.test.ts', () => {
             // Simulate what writeDocToDocState returns (the raw stored doc without _meta/_rev)
             const masterState = { id: 'foobar', name: 'test', _deleted: false };
 
-            // BUG: with the old code, this fails because mergedAssumed has
-            // { ..., private: undefined } (4 keys) vs masterState (3 keys)
-            assert.strictEqual(
-                Object.keys(mergedAssumed).length === Object.keys(masterState).length + 1,
-                true,
-                'merged doc should have exactly one extra key (the server-only field)'
-            );
-            assert.strictEqual(
-                Object.values(mergedAssumed).every(v => v !== undefined),
-                true,
-                'no property should be undefined (breaks deepEqual key count)'
+            // The merged doc must have the same key set as the master state,
+            // otherwise deepEqual inside masterWrite would report a conflict
+            // that does not actually exist.
+            assert.deepStrictEqual(
+                Object.keys(mergedAssumed).sort(),
+                Object.keys(masterState).sort()
             );
         });
     });

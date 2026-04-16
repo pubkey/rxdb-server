@@ -1,8 +1,11 @@
 import assert from 'assert';
 
 import {
+    RxCollection,
     RxDocumentData,
+    RxJsonSchema,
     clone,
+    createRxDatabase,
     randomToken
 } from 'rxdb/plugins/core';
 import {
@@ -863,6 +866,104 @@ describe('endpoint-replication.test.ts', () => {
 
             await replicationState.cancel();
             await col.database.close();
+        });
+        it('should not produce false conflicts when a serverOnlyField is absent from the stored document', async () => {
+            /**
+             * Reproduces a conflict-handling bug:
+             * When a document is stored on the server without the configured
+             * serverOnlyField (e.g. because the field is optional and was
+             * never set), the push endpoint merges a `null` value for that
+             * field into the assumedMasterState before calling masterWrite.
+             * masterWrite's isEqual check then fails because the stored
+             * masterState has no such property, causing a false conflict
+             * that silently reverts the client's update.
+             */
+            type ConflictDocType = {
+                id: string;
+                counter: number;
+                serverSecret?: string;
+            };
+            const conflictSchema: RxJsonSchema<ConflictDocType> = {
+                version: 0,
+                primaryKey: 'id',
+                type: 'object',
+                properties: {
+                    id: { type: 'string', maxLength: 100 },
+                    counter: { type: 'integer', minimum: 0, maximum: 1000, multipleOf: 1 },
+                    serverSecret: { type: 'string', maxLength: 100 }
+                },
+                required: ['id', 'counter']
+            };
+
+            async function createCol(): Promise<RxCollection<ConflictDocType>> {
+                const db = await createRxDatabase<{ items: RxCollection<ConflictDocType> }>({
+                    name: randomToken(10),
+                    storage: config.storage.getStorage(),
+                    multiInstance: false
+                });
+                const cols = await db.addCollections({
+                    items: { schema: conflictSchema }
+                });
+                return cols.items;
+            }
+
+            const serverCol = await createCol();
+            // Insert a document WITHOUT the server-only field.
+            // serverSecret is optional in the schema, so this is a valid write.
+            await serverCol.insert({ id: 'doc1', counter: 0 });
+
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: serverCol.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addReplicationEndpoint<ConflictDocType>({
+                name: randomToken(10),
+                collection: serverCol,
+                serverOnlyFields: ['serverSecret']
+            });
+            await server.start();
+
+            const clientCol = await createCol();
+            const url = 'http://localhost:' + port + '/' + endpoint.urlPath;
+            const replicationState = replicateServer<ConflictDocType>({
+                collection: clientCol,
+                replicationIdentifier: randomToken(10),
+                url,
+                headers,
+                live: true,
+                push: {},
+                pull: {},
+                eventSource: EventSource
+            });
+            ensureReplicationHasNoErrors(replicationState);
+            await replicationState.awaitInSync();
+
+            // Client has the doc without serverSecret (as expected, it is stripped).
+            const clientDoc = await clientCol.findOne('doc1').exec(true);
+            assert.strictEqual(clientDoc.counter, 0);
+            assert.strictEqual(typeof clientDoc.serverSecret, 'undefined');
+
+            // Client modifies the document. This push must not produce a
+            // false conflict because the only real change is `counter`.
+            await clientDoc.getLatest().patch({ counter: 1 });
+            await replicationState.awaitInSync();
+
+            // The update must be reflected on the server. With the bug,
+            // the false conflict overwrites the client's change, so the
+            // server counter stays at 0.
+            const serverDoc = await serverCol.findOne('doc1').exec(true);
+            assert.strictEqual(
+                serverDoc.counter,
+                1,
+                'server counter should be updated to 1 (false conflict silently reverts client update)'
+            );
+
+            await replicationState.cancel();
+            await serverCol.database.close();
+            await clientCol.database.close();
         });
     });
 });

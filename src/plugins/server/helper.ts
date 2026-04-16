@@ -144,9 +144,20 @@ export function mergeServerDocumentFieldsMonad<RxDocType>(serverOnlyFields: stri
             return ret;
         }
         useFields.forEach(field => {
-            // Only copy if field exists on serverDoc to avoid creating
-            // properties with undefined value (which break deepEqual key count)
-            (ret as any)[field] = field in (serverDoc as any) ? (serverDoc as any)[field] : null;
+            /**
+             * If the field exists on the serverDoc, copy its value so that
+             * the server-side value always wins over anything the client
+             * sent. If it does not exist on the serverDoc, delete it from
+             * the merged document so the key is truly absent — using `null`
+             * here would make the merged row differ from the stored master
+             * state during the isEqual check inside masterWrite and
+             * produce a false conflict that silently reverts the write.
+             */
+            if (field in (serverDoc as any)) {
+                (ret as any)[field] = (serverDoc as any)[field];
+            } else {
+                delete (ret as any)[field];
+            }
         });
         return ret;
     }
