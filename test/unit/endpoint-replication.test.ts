@@ -711,7 +711,9 @@ describe('endpoint-replication.test.ts', () => {
             await col.database.close();
         });
         it('should replicate a new document from client to server when serverOnlyFields are set', async () => {
-            const serverCol = await humansCollection.create(0);
+            // Use humanDefault on both sides so the insert with lastName
+            // stripped by the server is still schema-valid.
+            const serverCol = await humansCollection.createBySchema(humanDefault);
             const port = await nextPort();
             const server = await createRxServer({
                 adapter: TEST_SERVER_ADAPTER,
@@ -753,6 +755,71 @@ describe('endpoint-replication.test.ts', () => {
 
             const serverDoc = await serverCol.findOne().exec(true);
             assert.strictEqual(serverDoc.passportId, 'new-doc-test');
+
+            await replicationState.cancel();
+            await serverCol.database.close();
+            await clientCol.database.close();
+        });
+        it('should not allow clients to set serverOnlyFields when inserting NEW documents via /push', async () => {
+            // A client must not be able to populate a server-only field
+            // when creating a new document via the replication push endpoint.
+            // The /set REST endpoint already guards against this (via
+            // stripServerOnlyFields), but the replication /push handler
+            // passes the client document straight into masterWrite when
+            // there is no existing serverDoc, so any server-only field
+            // value sent by the client would be persisted.
+            const serverCol = await humansCollection.createBySchema(humanDefault);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: serverCol.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addReplicationEndpoint<HumanDocumentType>({
+                name: randomToken(10),
+                collection: serverCol,
+                serverOnlyFields: ['lastName']
+            });
+            await server.start();
+
+            const clientCol = await humansCollection.createBySchema(humanDefault);
+            const url = 'http://localhost:' + port + '/' + endpoint.urlPath;
+            const replicationState = replicateServer<HumanDocumentType>({
+                collection: clientCol,
+                replicationIdentifier: randomToken(10),
+                url,
+                headers,
+                live: true,
+                push: {},
+                pull: {},
+                eventSource: EventSource
+            });
+            ensureReplicationHasNoErrors(replicationState);
+            await replicationState.awaitInSync();
+
+            // Client inserts a new document and includes a value for the
+            // server-only field. The schema allows lastName as a normal
+            // field on the client, but the server treats it as server-only
+            // and must not accept the client-provided value on insert.
+            const hackedValue = 'HackedByClient';
+            const newDoc = schemaObjects.humanData('push-new-doc-server-only');
+            newDoc.lastName = hackedValue;
+            await clientCol.insert(newDoc);
+            await replicationState.awaitInSync();
+
+            await waitUntil(async () => {
+                const docs = await serverCol.find().exec();
+                return docs.length === 1;
+            });
+
+            const serverDoc = await serverCol.findOne().exec(true);
+            assert.strictEqual(serverDoc.passportId, 'push-new-doc-server-only');
+            assert.notStrictEqual(
+                serverDoc.lastName,
+                hackedValue,
+                'Client must not be able to set a server-only field on document creation via replication /push'
+            );
 
             await replicationState.cancel();
             await serverCol.database.close();
