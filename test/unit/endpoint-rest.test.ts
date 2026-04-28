@@ -3,6 +3,7 @@ import assert from 'assert';
 import {
     ensureNotFalsy,
     lastOfArray,
+    MangoQuery,
     randomToken
 } from 'rxdb/plugins/core';
 import {
@@ -295,6 +296,52 @@ describe('endpoint-rest.test.ts', () => {
             const last = ensureNotFalsy(lastOfArray(emitted));
             assert.strictEqual(last[0].passportId, 'only-matching');
             assert.strictEqual(last.length, 1);
+
+            await col.database.close();
+        });
+        it('should not allow $regex queries', async () => {
+            /**
+             * Reproduces a queryModifier bug:
+             * The /query endpoint correctly rejects $regex queries with
+             * 400 Bad Request (DOS-attack protection wraps the queryModifier
+             * with a check that throws on $regex). The /query/observe handler
+             * runs the same wrapped queryModifier but calls it AFTER
+             * setSSEHeaders has already committed a 200 OK SSE response,
+             * and the call is not wrapped in try/catch. A client that sends
+             * a $regex query therefore sees a successful 200 status and an
+             * empty stream that the server then drops, instead of the same
+             * 400 Bad Request that /query returns.
+             */
+            const col = await humansCollection.create(5);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                queryModifier
+            });
+            await server.start();
+
+            const queryAsBase64 = btoa(JSON.stringify({
+                selector: {
+                    firstName: {
+                        $regex: 'foobar'
+                    }
+                }
+            } satisfies MangoQuery<HumanDocumentType>));
+            const url = 'http://localhost:' + port + '/' + endpoint.urlPath + '/query/observe?query=' + queryAsBase64;
+            const response = await fetch(url, { headers });
+
+            assert.strictEqual(
+                response.status,
+                400,
+                '/query/observe must reject $regex queries with 400 Bad Request, just like /query'
+            );
 
             await col.database.close();
         });
