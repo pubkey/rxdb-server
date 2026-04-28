@@ -221,6 +221,18 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
                     const id = (docData as any)[primaryPath];
                     const doc = docs.get(id);
                     if (!doc) {
+                        // The changeValidator must also be enforced for inserts
+                        // of new documents. Otherwise a client could create
+                        // documents that bypass the validator, while updates of
+                        // existing documents are correctly rejected.
+                        const isInsertAllowed = this.changeValidator(authData, {
+                            newDocumentState: removeServerOnlyFields(docData as any),
+                            assumedMasterState: undefined
+                        });
+                        if (!isInsertAllowed) {
+                            adapter.closeConnection(res, 403, 'Forbidden');
+                            return;
+                        }
                         // Strip server-only fields from the client doc before
                         // inserting. Without this, a client could populate
                         // server-only ("readonly") fields when creating a new
