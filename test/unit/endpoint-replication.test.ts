@@ -808,6 +808,7 @@ describe('endpoint-replication.test.ts', () => {
             await clientCol.insert(newDoc);
             await replicationState.awaitInSync();
 
+
             await waitUntil(async () => {
                 const docs = await serverCol.find().exec();
                 return docs.length === 1;

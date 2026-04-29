@@ -141,6 +141,10 @@ export function mergeServerDocumentFieldsMonad<RxDocType>(serverOnlyFields: stri
         }
         const ret = flatClone(clientDoc);
         if (!serverDoc) {
+            // No prior server-side state exists for this document (new
+            // insert). The client must not be able to populate server-only
+            // fields on creation, so strip them from the merged document.
+            useFields.forEach(field => delete (ret as any)[field]);
             return ret;
         }
         useFields.forEach(field => {
