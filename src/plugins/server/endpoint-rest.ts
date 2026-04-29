@@ -122,15 +122,25 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
             let authData = await getAuthDataByRequest(this.server, req, res);
             if (!authData) { return; }
 
-            adapter.setSSEHeaders(res);
+            // Run the queryModifier BEFORE setSSEHeaders so that a bad
+            // request (e.g. a $regex query that the modifier wrapper
+            // rejects to prevent DOS attacks) can still be answered
+            // with a proper 400 response, mirroring the /query endpoint.
+            let useQuery: FilledMangoQuery<RxDocType>;
+            try {
+                useQuery = this.queryModifier(
+                    ensureNotFalsy(authData),
+                    normalizeMangoQuery(
+                        this.collection.schema.jsonSchema,
+                        JSON.parse(atob(adapter.getRequestQuery(req).query as string))
+                    )
+                );
+            } catch (err) {
+                adapter.closeConnection(res, 400, 'Bad Request');
+                return;
+            }
 
-            const useQuery: FilledMangoQuery<RxDocType> = this.queryModifier(
-                ensureNotFalsy(authData),
-                normalizeMangoQuery(
-                    this.collection.schema.jsonSchema,
-                    JSON.parse(atob(adapter.getRequestQuery(req).query as string))
-                )
-            );
+            adapter.setSSEHeaders(res);
 
             const rxQuery = this.collection.find(useQuery as any);
             const subscription = rxQuery.$.pipe(
