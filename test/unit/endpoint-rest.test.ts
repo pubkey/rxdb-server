@@ -561,6 +561,43 @@ describe('endpoint-rest.test.ts', () => {
             await col.database.close();
 
         });
+        it('should not accept new document inserts if changeValidator says no', async () => {
+            // Bug: the /set endpoint only ran the changeValidator for UPDATES
+            // of existing documents, not for INSERTS of new documents. A
+            // changeValidator that returns false therefore had no effect on
+            // new-document writes, contradicting the documented contract that
+            // the changeValidator decides whether a change is accepted.
+            const col = await humansCollection.create(0);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                changeValidator: () => false
+            });
+            await server.start();
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            const newDoc: HumanDocumentType = schemaObjects.humanData('new-doc-cv', 1, headers.userid);
+
+            await assertThrows(
+                () => client.set([newDoc]),
+                Error,
+                'error'
+            );
+
+            // The new document must NOT have been inserted because the
+            // changeValidator rejected it.
+            const docsAfter = await col.find().exec();
+            assert.strictEqual(docsAfter.length, 0);
+
+            await col.database.close();
+        });
         it('should throw an error via handleError when the server rejects a set', async () => {
             const col = await humansCollection.create(1);
             const docs = await col.find().exec();

@@ -231,6 +231,21 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
                     const id = (docData as any)[primaryPath];
                     const doc = docs.get(id);
                     if (!doc) {
+                        // Run the changeValidator for new document inserts as
+                        // well. Previously the validator was only invoked for
+                        // updates, so a changeValidator that rejected writes
+                        // had no effect on inserts via /set, which is
+                        // inconsistent with the replication endpoint and the
+                        // documented contract that the validator gates all
+                        // changes.
+                        const isAllowed = this.changeValidator(authData, {
+                            newDocumentState: removeServerOnlyFields(docData as any),
+                            assumedMasterState: undefined
+                        });
+                        if (!isAllowed) {
+                            adapter.closeConnection(res, 403, 'Forbidden');
+                            return;
+                        }
                         // Strip server-only fields from the client doc before
                         // inserting. Without this, a client could populate
                         // server-only ("readonly") fields when creating a new
