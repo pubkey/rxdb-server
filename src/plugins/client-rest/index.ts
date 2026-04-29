@@ -33,7 +33,12 @@ export class RxRestClient<RxDocType> {
 
     observeQuery(query: MangoQuery<RxDocType>): Observable<RxDocType[]> {
         const result = new Subject<RxDocType[]>;
-        const queryAsBase64 = btoa(JSON.stringify(query));
+        // Standard base64 uses '+' and '/'; both are URL-reserved and a raw
+        // '+' in the query string is decoded as a space by the server's
+        // URL parser. Without encoding, the server's atob() then rejects
+        // the corrupted string with "Invalid character" and the SSE
+        // connection silently never delivers any document.
+        const queryAsBase64 = encodeURIComponent(btoa(JSON.stringify(query)));
         const eventSource: EventSource = new this.eventSource(
             this.endpointUrl + '/query/observe?query=' + queryAsBase64,
             {

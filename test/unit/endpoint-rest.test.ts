@@ -345,6 +345,59 @@ describe('endpoint-rest.test.ts', () => {
 
             await col.database.close();
         });
+        it('should work when the base64-encoded query contains URL-reserved characters', async () => {
+            /**
+             * The client serializes the query as base64 and embeds it into the
+             * /query/observe URL as a query parameter. Standard base64 uses
+             * '+' and '/' which are URL-reserved: in a URL query string, '+'
+             * is decoded as a space, so the server receives a corrupted base64
+             * string and atob() throws "Invalid character". The SSE handler
+             * crashes after the response headers are already written, so the
+             * client never receives any document and just hangs.
+             *
+             * The firstName chosen here is unicode whose JSON-stringified
+             * UTF-8 bytes encode to a base64 string that contains '+'.
+             */
+            const targetFirstName = 'ûÿþ';
+            const queryB64 = btoa(JSON.stringify({
+                selector: { firstName: { $eq: targetFirstName } }
+            }));
+            assert.ok(
+                queryB64.includes('+') || queryB64.includes('/'),
+                'pre-condition for this test: the base64 of the query must contain a URL-reserved character'
+            );
+
+            const col = await humansCollection.create(0);
+            await col.insert(schemaObjects.humanData('match-doc', 1, targetFirstName));
+            await col.insert(schemaObjects.humanData('other-doc', 2, 'normal'));
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            const emitted: HumanDocumentType[][] = [];
+            const subscription = client.observeQuery({
+                selector: { firstName: { $eq: targetFirstName } }
+            }).subscribe(result => emitted.push(result));
+
+            await waitUntil(() => emitted.length === 1, 3000);
+
+            const last = ensureNotFalsy(lastOfArray(emitted));
+            assert.strictEqual(last.length, 1);
+            assert.strictEqual(last[0].passportId, 'match-doc');
+
+            subscription.unsubscribe();
+            await col.database.close();
+        });
     });
     describe('/get', () => {
         it('should return the correct documents', async () => {
