@@ -711,9 +711,8 @@ describe('endpoint-replication.test.ts', () => {
             await col.database.close();
         });
         it('should replicate a new document from client to server when serverOnlyFields are set', async () => {
-            // The server schema must allow the server-only field to be absent
-            // because clients never populate it on insert. Use humanDefault
-            // where lastName is optional.
+            // Use humanDefault on both sides so the insert with lastName
+            // stripped by the server is still schema-valid.
             const serverCol = await humansCollection.createBySchema(humanDefault);
             const port = await nextPort();
             const server = await createRxServer({
@@ -761,12 +760,14 @@ describe('endpoint-replication.test.ts', () => {
             await serverCol.database.close();
             await clientCol.database.close();
         });
-        it('should not allow clients to set serverOnlyFields when inserting NEW documents via replication push', async () => {
-            // The client must not be able to populate a server-only field
-            // when creating a brand-new document. The server has no prior
-            // state for this document, but the value the client sent for the
-            // server-only field must still be discarded on store, the same
-            // way it is for the REST /set endpoint.
+        it('should not allow clients to set serverOnlyFields when inserting NEW documents via /push', async () => {
+            // A client must not be able to populate a server-only field
+            // when creating a new document via the replication push endpoint.
+            // The /set REST endpoint already guards against this (via
+            // stripServerOnlyFields), but the replication /push handler
+            // passes the client document straight into masterWrite when
+            // there is no existing serverDoc, so any server-only field
+            // value sent by the client would be persisted.
             const serverCol = await humansCollection.createBySchema(humanDefault);
             const port = await nextPort();
             const server = await createRxServer({
@@ -797,25 +798,28 @@ describe('endpoint-replication.test.ts', () => {
             ensureReplicationHasNoErrors(replicationState);
             await replicationState.awaitInSync();
 
-            // Client crafts a NEW document with the server-only field populated.
-            const newDoc: HumanDocumentType = schemaObjects.humanData('new-replication-doc', 1);
-            newDoc.lastName = 'HackedValue';
+            // Client inserts a new document and includes a value for the
+            // server-only field. The schema allows lastName as a normal
+            // field on the client, but the server treats it as server-only
+            // and must not accept the client-provided value on insert.
+            const hackedValue = 'HackedByClient';
+            const newDoc = schemaObjects.humanData('push-new-doc-server-only');
+            newDoc.lastName = hackedValue;
             await clientCol.insert(newDoc);
             await replicationState.awaitInSync();
 
-            // Wait for the new document to be persisted on the server.
+
             await waitUntil(async () => {
                 const docs = await serverCol.find().exec();
                 return docs.length === 1;
             });
 
-            // The server must NOT have stored the client-supplied value for
-            // the server-only field on the brand-new document.
-            const serverDoc = await serverCol.findOne('new-replication-doc').exec(true);
+            const serverDoc = await serverCol.findOne().exec(true);
+            assert.strictEqual(serverDoc.passportId, 'push-new-doc-server-only');
             assert.notStrictEqual(
                 serverDoc.lastName,
-                'HackedValue',
-                'Client must not be able to populate a server-only field when creating a new document via replication push'
+                hackedValue,
+                'Client must not be able to set a server-only field on document creation via replication /push'
             );
 
             await replicationState.cancel();

@@ -122,15 +122,25 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
             let authData = await getAuthDataByRequest(this.server, req, res);
             if (!authData) { return; }
 
-            adapter.setSSEHeaders(res);
+            // Run the queryModifier BEFORE setSSEHeaders so that a bad
+            // request (e.g. a $regex query that the modifier wrapper
+            // rejects to prevent DOS attacks) can still be answered
+            // with a proper 400 response, mirroring the /query endpoint.
+            let useQuery: FilledMangoQuery<RxDocType>;
+            try {
+                useQuery = this.queryModifier(
+                    ensureNotFalsy(authData),
+                    normalizeMangoQuery(
+                        this.collection.schema.jsonSchema,
+                        JSON.parse(atob(adapter.getRequestQuery(req).query as string))
+                    )
+                );
+            } catch (err) {
+                adapter.closeConnection(res, 400, 'Bad Request');
+                return;
+            }
 
-            const useQuery: FilledMangoQuery<RxDocType> = this.queryModifier(
-                ensureNotFalsy(authData),
-                normalizeMangoQuery(
-                    this.collection.schema.jsonSchema,
-                    JSON.parse(atob(adapter.getRequestQuery(req).query as string))
-                )
-            );
+            adapter.setSSEHeaders(res);
 
             const rxQuery = this.collection.find(useQuery as any);
             const subscription = rxQuery.$.pipe(
@@ -221,6 +231,21 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
                     const id = (docData as any)[primaryPath];
                     const doc = docs.get(id);
                     if (!doc) {
+                        // Run the changeValidator for new document inserts as
+                        // well. Previously the validator was only invoked for
+                        // updates, so a changeValidator that rejected writes
+                        // had no effect on inserts via /set, which is
+                        // inconsistent with the replication endpoint and the
+                        // documented contract that the validator gates all
+                        // changes.
+                        const isAllowed = this.changeValidator(authData, {
+                            newDocumentState: removeServerOnlyFields(docData as any),
+                            assumedMasterState: undefined
+                        });
+                        if (!isAllowed) {
+                            adapter.closeConnection(res, 403, 'Forbidden');
+                            return;
+                        }
                         // Strip server-only fields from the client doc before
                         // inserting. Without this, a client could populate
                         // server-only ("readonly") fields when creating a new

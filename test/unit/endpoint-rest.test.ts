@@ -3,6 +3,7 @@ import assert from 'assert';
 import {
     ensureNotFalsy,
     lastOfArray,
+    MangoQuery,
     randomToken
 } from 'rxdb/plugins/core';
 import {
@@ -298,6 +299,105 @@ describe('endpoint-rest.test.ts', () => {
 
             await col.database.close();
         });
+        it('should not allow $regex queries', async () => {
+            /**
+             * Reproduces a queryModifier bug:
+             * The /query endpoint correctly rejects $regex queries with
+             * 400 Bad Request (DOS-attack protection wraps the queryModifier
+             * with a check that throws on $regex). The /query/observe handler
+             * runs the same wrapped queryModifier but calls it AFTER
+             * setSSEHeaders has already committed a 200 OK SSE response,
+             * and the call is not wrapped in try/catch. A client that sends
+             * a $regex query therefore sees a successful 200 status and an
+             * empty stream that the server then drops, instead of the same
+             * 400 Bad Request that /query returns.
+             */
+            const col = await humansCollection.create(5);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                queryModifier
+            });
+            await server.start();
+
+            const queryAsBase64 = btoa(JSON.stringify({
+                selector: {
+                    firstName: {
+                        $regex: 'foobar'
+                    }
+                }
+            } satisfies MangoQuery<HumanDocumentType>));
+            const url = 'http://localhost:' + port + '/' + endpoint.urlPath + '/query/observe?query=' + queryAsBase64;
+            const response = await fetch(url, { headers });
+
+            assert.strictEqual(
+                response.status,
+                400,
+                '/query/observe must reject $regex queries with 400 Bad Request, just like /query'
+            );
+
+            await col.database.close();
+        });
+        it('should work when the base64-encoded query contains URL-reserved characters', async () => {
+            /**
+             * The client serializes the query as base64 and embeds it into the
+             * /query/observe URL as a query parameter. Standard base64 uses
+             * '+' and '/' which are URL-reserved: in a URL query string, '+'
+             * is decoded as a space, so the server receives a corrupted base64
+             * string and atob() throws "Invalid character". The SSE handler
+             * crashes after the response headers are already written, so the
+             * client never receives any document and just hangs.
+             *
+             * The firstName chosen here is unicode whose JSON-stringified
+             * UTF-8 bytes encode to a base64 string that contains '+'.
+             */
+            const targetFirstName = 'ûÿþ';
+            const queryB64 = btoa(JSON.stringify({
+                selector: { firstName: { $eq: targetFirstName } }
+            }));
+            assert.ok(
+                queryB64.includes('+') || queryB64.includes('/'),
+                'pre-condition for this test: the base64 of the query must contain a URL-reserved character'
+            );
+
+            const col = await humansCollection.create(0);
+            await col.insert(schemaObjects.humanData('match-doc', 1, targetFirstName));
+            await col.insert(schemaObjects.humanData('other-doc', 2, 'normal'));
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            const emitted: HumanDocumentType[][] = [];
+            const subscription = client.observeQuery({
+                selector: { firstName: { $eq: targetFirstName } }
+            }).subscribe(result => emitted.push(result));
+
+            await waitUntil(() => emitted.length === 1, 3000);
+
+            const last = ensureNotFalsy(lastOfArray(emitted));
+            assert.strictEqual(last.length, 1);
+            assert.strictEqual(last[0].passportId, 'match-doc');
+
+            subscription.unsubscribe();
+            await col.database.close();
+        });
     });
     describe('/get', () => {
         it('should return the correct documents', async () => {
@@ -460,6 +560,43 @@ describe('endpoint-rest.test.ts', () => {
 
             await col.database.close();
 
+        });
+        it('should not accept new document inserts if changeValidator says no', async () => {
+            // Bug: the /set endpoint only ran the changeValidator for UPDATES
+            // of existing documents, not for INSERTS of new documents. A
+            // changeValidator that returns false therefore had no effect on
+            // new-document writes, contradicting the documented contract that
+            // the changeValidator decides whether a change is accepted.
+            const col = await humansCollection.create(0);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                changeValidator: () => false
+            });
+            await server.start();
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            const newDoc: HumanDocumentType = schemaObjects.humanData('new-doc-cv', 1, headers.userid);
+
+            await assertThrows(
+                () => client.set([newDoc]),
+                Error,
+                'error'
+            );
+
+            // The new document must NOT have been inserted because the
+            // changeValidator rejected it.
+            const docsAfter = await col.find().exec();
+            assert.strictEqual(docsAfter.length, 0);
+
+            await col.database.close();
         });
         it('should throw an error via handleError when the server rejects a set', async () => {
             const col = await humansCollection.create(1);

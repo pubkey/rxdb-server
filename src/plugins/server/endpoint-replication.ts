@@ -29,7 +29,8 @@ import {
     getDocAllowedMatcher,
     mergeServerDocumentFieldsMonad,
     removeServerOnlyFieldsMonad,
-    setCors
+    setCors,
+    stripServerOnlyFieldsMonad
 } from './helper.ts';
 import type { RxServerCheckpoint } from '../replication-server/types.ts';
 
@@ -79,6 +80,7 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
         }
         const removeServerOnlyFields = removeServerOnlyFieldsMonad<RxDocType>(this.serverOnlyFields);
         const mergeServerDocumentFields = mergeServerDocumentFieldsMonad<RxDocType>(this.serverOnlyFields);
+        const stripServerOnlyFields = stripServerOnlyFieldsMonad<RxDocType>(this.serverOnlyFields);
 
         this.server.adapter.get(this.server.serverApp, '/' + this.urlPath + '/pull', async (req: any, res: any) => {
             const authData = await getAuthDataByRequest(this.server, req, res);
@@ -161,8 +163,16 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
                 }
 
                 const serverDoc = currentStateDocs.get(id);
+                // When the document does not yet exist on the server, strip
+                // server-only fields from the new document state so a client
+                // cannot populate them on insert. Updates of existing docs
+                // are already protected because mergeServerDocumentFields
+                // overwrites those fields with the stored server value.
+                const newDocumentState = serverDoc
+                    ? mergeServerDocumentFields(row.newDocumentState, serverDoc)
+                    : stripServerOnlyFields(row.newDocumentState);
                 return {
-                    newDocumentState: mergeServerDocumentFields(row.newDocumentState, serverDoc),
+                    newDocumentState,
                     assumedMasterState: mergeServerDocumentFields(row.assumedMasterState as any, serverDoc)
                 } as typeof row;
             });
