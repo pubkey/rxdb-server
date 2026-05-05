@@ -105,3 +105,12 @@ jobs:
           git add package.json
           git commit -m "chore: update rxdb to $TARGET (master: ${COMMIT:0:7})"
           git push
+
+      - name: Trigger rxdb-premium-dev version bump
+        run: |
+          curl -f -X POST https://api.github.com/repos/pubkey/rxdb-premium-dev/dispatches \
+            -H "Authorization: token ${{ secrets.RXDB_PREMIUM_VERSION_BUMP }}" \
+            -H "Accept: application/vnd.github+json" \
+            -d '{"event_type":"rxdb-release"}'
+
+
