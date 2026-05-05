@@ -69,6 +69,15 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      - name: Empty changelog folder
+        run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          find orga/changelog -name '*.md' ! -name 'README.md' -delete
+          git add orga/changelog
+          git commit -m "chore: empty changelog folder after release ${{steps.vars.outputs.version}}" || echo "Nothing to commit"
+          git push origin HEAD
+
       - name: Trigger rxdb-premium-dev version bump
         run: |
           curl -f -X POST https://api.github.com/repos/pubkey/rxdb-premium-dev/dispatches \
