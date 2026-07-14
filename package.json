@@ -106,6 +106,6 @@
     "rxdb": "https://github.com/pubkey/rxdb/archive/dd94f39d80b4ca8f84967e643b600e15dacd027d.tar.gz",
     "rxjs": "7.8.2",
     "ts-node": "10.9.2",
-    "typescript": "5.9.3"
+    "typescript": "7.0.2"
   }
 }
