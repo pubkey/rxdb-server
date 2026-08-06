@@ -519,6 +519,67 @@ describe('endpoint-replication.test.ts', () => {
             serverCol.database.close();
             clientCol.database.close();
         });
+        it('should not leak non-matching documents in the /push conflict response', async () => {
+            const serverCol = await humansCollection.create(0);
+
+            /**
+             * A document that belongs to another user ('bob').
+             * The client below authenticates as 'alice' and the queryModifier
+             * only allows it to see documents where firstName === 'alice',
+             * so the content of this document must never reach the client.
+             */
+            const foreignDocId = 'foreign-doc';
+            const foreignDoc = schemaObjects.humanData(foreignDocId, 42, 'bob');
+            foreignDoc.lastName = 'TopSecretLastName';
+            await serverCol.insert(foreignDoc);
+
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: serverCol.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addReplicationEndpoint({
+                name: randomToken(10),
+                collection: serverCol,
+                queryModifier
+            });
+            await server.start();
+
+            /**
+             * The client pushes a write for the primary key of the foreign
+             * document. It passes the write checks because the
+             * newDocumentState is crafted to match the queryModifier and no
+             * assumedMasterState is sent.
+             */
+            const url = 'http://localhost:' + port + '/' + endpoint.urlPath + '/push';
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    ...headers,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify([{
+                    newDocumentState: {
+                        passportId: foreignDocId,
+                        firstName: headers.userid,
+                        lastName: 'anything',
+                        age: 1,
+                        _deleted: false
+                    }
+                }])
+            });
+            const responseBody = await response.text();
+
+            assert.ok(
+                !responseBody.includes('TopSecretLastName') && !responseBody.includes('"bob"'),
+                'The server must not return the content of a document that the queryModifier does not allow the client to see, got: ' + responseBody
+            );
+            assert.strictEqual(response.status, 403);
+
+            await serverCol.database.close();
+        });
     });
     describe('changeValidator', () => {
         const changeValidator: RxServerChangeValidator<AuthType, HumanDocumentType> = (authData, change) => {

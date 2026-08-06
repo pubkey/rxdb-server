@@ -152,6 +152,23 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
             const currentStateDocs = new Map<string, RxDocumentData<RxDocType>>();
             currentStateDocsArray.forEach(d => currentStateDocs.set((d as any)[primaryPath], d));
 
+            /**
+             * The client must also be allowed to access the state that is
+             * currently stored on the server for the documents it writes to.
+             * Only checking the client-provided newDocumentState/assumedMasterState
+             * is not enough: a client can send a write for the primary of a foreign
+             * document with a newDocumentState that matches the queryModifier and
+             * without an assumedMasterState. The write itself is then refused by
+             * the replication protocol because it is a conflict, but the conflict
+             * response contains the full stored master document which would leak
+             * documents that the queryModifier does not allow the client to see.
+             */
+            const nonAllowedServerDoc = currentStateDocsArray.find(d => !docDataMatcherWrite(d as any));
+            if (nonAllowedServerDoc) {
+                adapter.closeConnection(res, 403, 'Forbidden');
+                return;
+            }
+
             const useRows: typeof rows = rows.map((row) => {
                 const id = (row.newDocumentState as any)[primaryPath];
                 const isChangeValid = this.changeValidator(ensureNotFalsy(authData), {
@@ -182,6 +199,18 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
             }
 
             const conflicts = await replicationHandler.masterWrite(useRows);
+
+            /**
+             * The conflict response contains the documents as they are stored on
+             * the server. Ensure none of them is a document that the client is not
+             * allowed to see, for example when the stored document was changed by
+             * someone else between the check above and the write.
+             */
+            const nonAllowedConflict = conflicts.find(c => !docDataMatcherWrite(c as any));
+            if (nonAllowedConflict) {
+                adapter.closeConnection(res, 403, 'Forbidden');
+                return;
+            }
 
             adapter.setResponseHeader(res, 'Content-Type', 'application/json');
             adapter.endResponseJson(res, conflicts.map(c => removeServerOnlyFields(c)));
