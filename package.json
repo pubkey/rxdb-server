@@ -81,7 +81,7 @@
     "@types/express": "5.0.6",
     "async-test-util": "2.5.0",
     "cors": "2.8.6",
-    "eventsource": "4.1.0"
+    "eventsource": "4.1.1"
   },
   "devDependencies": {
     "@babel/cli": "7.29.7",
