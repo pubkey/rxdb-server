@@ -101,7 +101,7 @@
     "cross-env": "10.1.0",
     "express": "5.2.1",
     "get-port": "5.1.1",
-    "mocha": "11.7.6",
+    "mocha": "11.8.0",
     "rimraf": "6.1.3",
     "rxdb": "https://github.com/pubkey/rxdb/archive/b23a26c2b46706b6e314d7c242213d08eaf8aa16.tar.gz",
     "rxjs": "7.8.2",
