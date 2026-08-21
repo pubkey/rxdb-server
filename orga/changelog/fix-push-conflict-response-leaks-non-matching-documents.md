@@ -1,1 +1,0 @@
-- FIX (rx-server) the replication `/push` endpoint leaked documents that the `queryModifier` does not allow the client to see. Pushing a write for a foreign document id returned the full stored document inside the conflict response. The current server state of a written document is now checked against the `queryModifier` and non-matching writes are answered with `403 Forbidden`.
