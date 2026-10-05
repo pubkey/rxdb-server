@@ -153,8 +153,14 @@ describe('endpoint-replication.test.ts', () => {
                 return docs.length === 0;
             });
 
-            serverCol.database.close();
-            clientCol.database.close();
+            /**
+             * Cancel the live replication before the server database is closed,
+             * otherwise it keeps pulling from the closed server and the 'fetch failed'
+             * error is thrown by ensureReplicationHasNoErrors() while the next test runs.
+             */
+            await replicationState.cancel();
+            await serverCol.database.close();
+            await clientCol.database.close();
         });
         it('should give a 426 error on outdated versions', async () => {
             const newestSchema = clone(schemas.human);
@@ -203,8 +209,8 @@ describe('endpoint-replication.test.ts', () => {
             assert.strictEqual(firstError.code, 'RC_PULL');
 
             await replicationState.cancel();
-            col.database.close();
-            clientCol.database.close();
+            await col.database.close();
+            await clientCol.database.close();
         });
         it('must replicate ongoing changes', async () => {
             const col = await humansCollection.create(5);
