@@ -73,7 +73,7 @@
     "test:integration:mongodb": "(cd test-integration && npm run transpile && npm run test:node:mongodb)"
   },
   "peerDependencies": {
-    "rxdb": "17.5.0",
+    "rxdb": "17.6.0",
     "rxjs": "*"
   },
   "dependencies": {
@@ -103,7 +103,7 @@
     "get-port": "5.1.1",
     "mocha": "12.0.3",
     "rimraf": "6.1.3",
-    "rxdb": "https://github.com/pubkey/rxdb/archive/4c8c9f7017291a888fee64e9f2641d48767133c5.tar.gz",
+    "rxdb": "https://github.com/pubkey/rxdb/archive/e67c46ea4bb7c8c5158972e5969cb7fec45f9cc8.tar.gz",
     "rxjs": "7.8.2",
     "ts-node": "10.9.2",
     "typescript": "5.9.3"
