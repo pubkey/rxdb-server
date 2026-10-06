@@ -1,1 +1,0 @@
-- FIX the replication test `create read update delete` did not cancel its live replication before it closed the databases. The replication kept pulling from the closed server and `ensureReplicationHasNoErrors()` threw `fetch failed` while the next test (`should give a 426 error on outdated versions`) was running, which made that test fail from time to time.
