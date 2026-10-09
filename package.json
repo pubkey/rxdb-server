@@ -103,7 +103,7 @@
     "get-port": "5.1.1",
     "mocha": "12.0.3",
     "rimraf": "6.1.3",
-    "rxdb": "https://github.com/pubkey/rxdb/archive/4b0bb8a07344afaee3ae1c6f70c4118404c344d9.tar.gz",
+    "rxdb": "https://github.com/pubkey/rxdb/archive/23444f0a2468939d59264db04eb5684e8bea6368.tar.gz",
     "rxjs": "7.8.2",
     "ts-node": "10.9.2",
     "typescript": "5.9.3"
