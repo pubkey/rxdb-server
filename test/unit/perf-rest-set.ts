@@ -4,9 +4,9 @@
  * that was changed by the overwrite-protection fix.
  *
  * Run with:
- *   npx ts-node --esm ./test/unit/perf-rest-set.ts
+ *   npx tsx ./test/unit/perf-rest-set.ts
  * or
- *   npx mocha --require ts-node/register ./test/unit/perf-rest-set.ts --exit
+ *   npx mocha --import=tsx ./test/unit/perf-rest-set.ts --exit
  */
 import {
     addRxPlugin,
