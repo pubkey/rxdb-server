@@ -66,7 +66,7 @@
     "build:bundle": "rimraf -rf rxdb-server.tgz && npx yarn@1.22.10 pack ./ --filename ./rxdb-server.tgz",
     "version": "node ./scripts/version.js",
     "check-types": "npm run build && tsc",
-    "test:unit": "npm run build && mocha --require ts-node/register ./test/unit.test.ts --bail --exit",
+    "test:unit": "npm run build && mocha --import=tsx ./test/unit.test.ts --bail --exit",
     "test:integration:init": "(cd ./scripts && bash test-integration-init.sh)",
     "test:integration:memory": "(cd test-integration && npm run transpile && npm run test:node:memory)",
     "test:integration:foundationdb": "(cd test-integration && npm run transpile && npm run test:node:foundationdb)",
@@ -105,7 +105,7 @@
     "rimraf": "6.1.3",
     "rxdb": "https://github.com/pubkey/rxdb/archive/d1dfbfa3bd37a95716d05f57685083f0b1c2aa13.tar.gz",
     "rxjs": "7.8.2",
-    "ts-node": "10.9.2",
-    "typescript": "5.9.3"
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
   }
 }
