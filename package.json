@@ -84,8 +84,8 @@
     "eventsource": "5.1.2"
   },
   "devDependencies": {
-    "@babel/cli": "8.0.6",
-    "@babel/core": "8.0.10",
+    "@babel/cli": "8.1.0",
+    "@babel/core": "8.1.0",
     "@babel/plugin-transform-literals": "8.0.1",
     "@babel/plugin-transform-modules-commonjs": "8.0.1",
     "@babel/plugin-transform-react-jsx": "8.0.1",
