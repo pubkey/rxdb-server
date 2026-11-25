@@ -1033,6 +1033,35 @@ describe('endpoint-rest.test.ts', () => {
 
             await col.database.close();
         });
+        it('should not delete if the changeValidator does not allow deletions', async () => {
+            const col = await humansCollection.create(0);
+            const doc = await col.insert(schemaObjects.humanData('no-delete-doc'));
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                changeValidator: (_authData, change) => !change.newDocumentState._deleted
+            });
+            await server.start();
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            await assertThrows(
+                () => client.delete([doc.primary]),
+                Error,
+                'error'
+            );
+
+            const docAfter = await col.findOne(doc.primary).exec();
+            assert.ok(docAfter);
+
+            await col.database.close();
+        });
         it('should not delete any document when one document of the request is not allowed', async () => {
             const col = await humansCollection.create(0);
             const ownDoc = await col.insert(schemaObjects.humanData('own-doc', 1, headers.userid));

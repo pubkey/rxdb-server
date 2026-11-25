@@ -1,0 +1,1 @@
+- FIX REST `/delete` called the `changeValidator` with `newDocumentState._deleted: false`, so a validator that blocks deletions did not block them [#473](https://github.com/pubkey/rxdb-server/pull/473)

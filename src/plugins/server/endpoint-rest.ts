@@ -310,7 +310,7 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
                         }
 
                         const isAllowedChange = this.changeValidator(authData, {
-                            newDocumentState: removeServerOnlyFields(doc.toJSON(true)) as any,
+                            newDocumentState: removeServerOnlyFields({ ...doc.toJSON(true), _deleted: true }) as any,
                             assumedMasterState: removeServerOnlyFields(doc.toJSON(true)) as any
                         });
                         if (!isAllowedChange) {
