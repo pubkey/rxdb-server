@@ -1180,6 +1180,121 @@ describe('endpoint-rest.test.ts', () => {
         });
     });
     describe('.serverOnlyFields', () => {
+        it('should not allow /query and /query/observe to filter or sort by serverOnlyFields', async () => {
+            const col = await humansCollection.create(3);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                serverOnlyFields: ['lastName']
+            });
+            await server.start();
+            const url = 'http://localhost:' + port + '/' + endpoint.urlPath;
+            const client = createRestClient<HumanDocumentType>(url, headers);
+
+            const forbiddenQueries: any[] = [
+                { selector: { lastName: { $gt: '' } } },
+                { selector: { $or: [{ firstName: { $ne: 'x' } }, { lastName: { $eq: 'y' } }] } },
+                { selector: { $and: [{ lastName: { $exists: true } }] } },
+                { selector: { firstName: { $ne: 'x' } }, sort: [{ lastName: 'asc' }] },
+                { selector: {}, index: ['lastName'] }
+            ];
+            for (const query of forbiddenQueries) {
+                await assertThrows(
+                    () => client.query(query),
+                    Error,
+                    'Bad Request'
+                );
+                const observeResponse = await fetch(
+                    url + '/query/observe?query=' + encodeURIComponent(btoa(JSON.stringify(query))),
+                    { headers }
+                );
+                assert.strictEqual(observeResponse.status, 400);
+                await observeResponse.text();
+            }
+
+            const allowed = await client.query({ selector: { firstName: { $ne: 'x' } }, sort: [{ firstName: 'asc' }] });
+            assert.strictEqual(allowed.documents.length, 3);
+
+            await col.database.close();
+        });
+        it('should keep all routes working when an indexed field is a serverOnlyField', async () => {
+            const col = await humansCollection.create(0);
+            await col.bulkInsert([
+                { ...schemaObjects.humanData('a'), firstName: 'z' },
+                { ...schemaObjects.humanData('b'), firstName: 'y' },
+                { ...schemaObjects.humanData('c'), firstName: 'x' }
+            ]);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                serverOnlyFields: ['firstName']
+            });
+            await server.start();
+            const url = 'http://localhost:' + port + '/' + endpoint.urlPath;
+            const client = createRestClient<HumanDocumentType>(url, headers);
+
+            const queryResult = await client.query({ selector: {} });
+            assert.deepStrictEqual(queryResult.documents.map(d => d.passportId), ['a', 'b', 'c']);
+
+            const observeResponse = await fetch(
+                url + '/query/observe?query=' + encodeURIComponent(btoa(JSON.stringify({ selector: {} }))),
+                { headers }
+            );
+            assert.strictEqual(observeResponse.status, 200);
+            await observeResponse.body?.cancel();
+
+            const getResult = await client.get(['a']);
+            assert.strictEqual(getResult.documents.length, 1);
+
+            const docA = await col.findOne('a').exec(true);
+            await client.set([{ ...docA.toMutableJSON(), lastName: 'changed' } as any]);
+            assert.strictEqual((await col.findOne('a').exec(true)).lastName, 'changed');
+
+            await client.delete(['b']);
+            assert.strictEqual(await col.findOne('b').exec(), null);
+
+            await col.database.close();
+        });
+        it('should still allow a queryModifier to use serverOnlyFields in /query', async () => {
+            const col = await humansCollection.create(0);
+            await col.insert({ ...schemaObjects.humanData('own'), age: 42 });
+            await col.insert({ ...schemaObjects.humanData('foreign'), age: 1 });
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                serverOnlyFields: ['age'],
+                queryModifier: (_authData, query) => {
+                    query.selector.age = { $eq: 42 };
+                    return query;
+                }
+            });
+            await server.start();
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+            const response = await client.query({ selector: {} });
+            assert.deepStrictEqual(response.documents.map(d => d.passportId), ['own']);
+            await col.database.close();
+        });
         it('should not return serverOnlyFields to /query requests', async () => {
             const col = await humansCollection.create(3);
             const port = await nextPort();
