@@ -10,7 +10,7 @@ import type {
     RxServerEndpoint,
     RxServerQueryModifier
 } from './types.ts';
-import { concatMap, filter } from 'rxjs';
+import { concatMap, filter, takeWhile, tap } from 'rxjs';
 import {
     ensureNotFalsy,
     getFromMapOrThrow
@@ -155,12 +155,18 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
                     try {
                         authData = await server.authHandler(adapter.getRequestHeaders(req)) as any;
                     } catch (err) {
-                        adapter.closeConnection(res, 401, 'Unauthorized');
+                        /**
+                         * The SSE headers are already sent, so no 401 can be returned here.
+                         * Instead the stream is ended, the client reconnects
+                         * and then gets the 401 response on the new request.
+                         */
                         return null;
                     }
 
                     return resultData;
                 }),
+                takeWhile(f => f !== null),
+                tap({ complete: () => adapter.endResponse(res) }),
                 filter(f => f !== null)
             ).subscribe(resultData => {
                 adapter.responseWrite(res, 'data: ' + JSON.stringify(resultData) + '\n\n');

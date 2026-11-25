@@ -16,7 +16,7 @@ import type {
     RxServerEndpoint,
     RxServerQueryModifier
 } from './types.ts';
-import { concatMap, filter } from 'rxjs';
+import { concatMap, filter, takeWhile, tap } from 'rxjs';
 import {
     ensureNotFalsy,
     lastOfArray
@@ -224,7 +224,11 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
                     try {
                         authData = await server.authHandler(adapter.getRequestHeaders(req));
                     } catch (err) {
-                        adapter.closeConnection(res, 401, 'Unauthorized');
+                        /**
+                         * The SSE headers are already sent, so no 401 can be returned here.
+                         * Instead the stream is ended, the client reconnects
+                         * and then gets the 401 response on the new request.
+                         */
                         return null;
                     }
 
@@ -238,6 +242,8 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
                         };
                     }
                 }),
+                takeWhile(f => f !== null),
+                tap({ complete: () => adapter.endResponse(res) }),
                 filter(f => f !== null && (f === 'RESYNC' || f.documents.length > 0))
             ).subscribe(filteredAndModified => {
                 if (filteredAndModified === 'RESYNC') {

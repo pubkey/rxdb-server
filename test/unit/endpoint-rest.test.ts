@@ -18,7 +18,7 @@ import {
     HumanDocumentType,
     humanDefault
 } from 'rxdb/plugins/test-utils';
-import { nextPort } from './test-helpers.ts';
+import { nextPort, customFetchWithFixedHeaders } from './test-helpers.ts';
 import { assertThrows, wait, waitUntil } from 'async-test-util';
 
 import config from './config.ts';
@@ -27,6 +27,7 @@ import {
     headers,
     queryModifier
 } from './test-helpers.ts';
+import { EventSource } from 'eventsource';
 import { TEST_SERVER_ADAPTER } from './config-server.test.ts';
 
 
@@ -266,6 +267,52 @@ describe('endpoint-rest.test.ts', () => {
             const last = ensureNotFalsy(lastOfArray(emitted));
             assert.deepStrictEqual(last.map(d => d.firstName), ['v2']);
 
+            await col.database.close();
+        });
+        it('should disconnect an open stream when the auth becomes invalid', async function () {
+            this.timeout(10 * 1000);
+            const col = await humansCollection.create(1);
+            const port = await nextPort();
+            let isValid = true;
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler: (requestHeaders) => {
+                    if (!isValid) {
+                        throw new Error('auth expired');
+                    }
+                    return authHandler(requestHeaders);
+                },
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+
+            const query = encodeURIComponent(btoa(JSON.stringify({ selector: {} })));
+            const url = 'http://localhost:' + port + '/' + endpoint.urlPath + '/query/observe?query=' + query;
+            const eventSource = new EventSource(url, { fetch: customFetchWithFixedHeaders(headers) });
+            let emitted = 0;
+            eventSource.onmessage = () => emitted++;
+            const errorCodes: (number | undefined)[] = [];
+            eventSource.onerror = (err) => errorCodes.push(err.code);
+            await waitUntil(() => emitted === 1);
+
+            isValid = false;
+            await col.insert(schemaObjects.humanData());
+
+            // the stream ends, so the client starts to reconnect
+            await waitUntil(() => errorCodes.length > 0);
+            assert.strictEqual(eventSource.readyState, eventSource.CONNECTING);
+
+            // the reconnect is answered with a 401
+            await waitUntil(() => errorCodes.includes(401), 8000);
+            assert.strictEqual(eventSource.readyState, eventSource.CLOSED);
+            assert.strictEqual(emitted, 1);
+
+            eventSource.close();
             await col.database.close();
         });
         it('should should automatically reconnect', async function () {
