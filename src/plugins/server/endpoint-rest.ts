@@ -204,14 +204,6 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
 
             let docsData: RxDocType[] = adapter.getRequestBody(req);
 
-            for (const docData of docsData) {
-                const allowed = docDataMatcherWrite(docData as any);
-                if (!allowed) {
-                    adapter.closeConnection(res, 403, 'Forbidden');
-                    return;
-                }
-            }
-
             function onWriteError(err: RxError, docData: RxDocType) {
                 if (err.rxdb && err.code === 'CONFLICT') {
                     // just retry on conflicts
@@ -255,6 +247,10 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
                         const mergedDocData = stripServerOnlyFields(
                             mergeServerDocumentFields(docData, undefined) as RxDocType
                         );
+                        if (!docDataMatcherWrite(mergedDocData as any)) {
+                            adapter.closeConnection(res, 403, 'Forbidden');
+                            return;
+                        }
                         writes.push(() => this.collection.insert(mergedDocData).catch(err => onWriteError(err, mergedDocData)));
                     } else {
                         // The user must also be allowed to access the existing document.
@@ -275,6 +271,10 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
                             return;
                         }
                         const mergedDocData = mergeServerDocumentFields(docData, doc.toJSON(true) as any);
+                        if (!docDataMatcherWrite(mergedDocData as any)) {
+                            adapter.closeConnection(res, 403, 'Forbidden');
+                            return;
+                        }
                         writes.push(() => doc.patch(mergedDocData).catch(err => onWriteError(err, mergedDocData)));
                     }
                 }

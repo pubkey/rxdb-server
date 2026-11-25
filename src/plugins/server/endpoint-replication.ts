@@ -133,21 +133,6 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
                 }
             }
 
-            // ensure all writes are allowed
-            const nonAllowedRow = rows.find(row => {
-                if (
-                    !docDataMatcherWrite(row.newDocumentState as any) ||
-                    (row.assumedMasterState && !docDataMatcherWrite(row.assumedMasterState as any))
-                ) {
-                    return true;
-                }
-            });
-            if (nonAllowedRow) {
-                adapter.closeConnection(res, 403, 'Forbidden');
-                return;
-            }
-            let hasInvalidChange = false;
-
             const currentStateDocsArray = await this.collection.storageInstance.findDocumentsById(ids, true);
             const currentStateDocs = new Map<string, RxDocumentData<RxDocType>>();
             currentStateDocsArray.forEach(d => currentStateDocs.set((d as any)[primaryPath], d));
@@ -171,14 +156,6 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
 
             const useRows: typeof rows = rows.map((row) => {
                 const id = (row.newDocumentState as any)[primaryPath];
-                const isChangeValid = this.changeValidator(ensureNotFalsy(authData), {
-                    newDocumentState: removeServerOnlyFields(row.newDocumentState),
-                    assumedMasterState: removeServerOnlyFields(row.assumedMasterState)
-                });
-                if (!isChangeValid) {
-                    hasInvalidChange = true;
-                }
-
                 const serverDoc = currentStateDocs.get(id);
                 // When the document does not yet exist on the server, strip
                 // server-only fields from the new document state so a client
@@ -193,6 +170,20 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
                     assumedMasterState: mergeServerDocumentFields(row.assumedMasterState as any, serverDoc)
                 } as typeof row;
             });
+
+            const nonAllowedRow = useRows.find(row => (
+                !docDataMatcherWrite(row.newDocumentState as any) ||
+                (row.assumedMasterState && !docDataMatcherWrite(row.assumedMasterState as any))
+            ));
+            if (nonAllowedRow) {
+                adapter.closeConnection(res, 403, 'Forbidden');
+                return;
+            }
+
+            const hasInvalidChange = rows.some(row => !this.changeValidator(ensureNotFalsy(authData), {
+                newDocumentState: removeServerOnlyFields(row.newDocumentState),
+                assumedMasterState: removeServerOnlyFields(row.assumedMasterState)
+            }));
             if (hasInvalidChange) {
                 adapter.closeConnection(res, 403, 'Forbidden');
                 return;
