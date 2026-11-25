@@ -1,1 +1,1 @@
-- FIX `/pullStream` of the replication endpoint and `/query/observe` of the REST endpoint could send events out of order when the `authHandler` took a different time per call, so clients ended with an older document state or query result
+- FIX `/pullStream` of the replication endpoint and `/query/observe` of the REST endpoint could send events out of order when the `authHandler` took a different time per call, so clients ended with an older document state or query result [#462](https://github.com/pubkey/rxdb-server/pull/462)
