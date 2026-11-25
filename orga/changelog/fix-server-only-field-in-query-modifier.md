@@ -1,1 +1,1 @@
-- FIX RxServer replication `/push` and REST `/set` returned `403 Forbidden` for updates of allowed documents when the `queryModifier` used a field from `serverOnlyFields`
+- FIX RxServer replication `/push` and REST `/set` returned `403 Forbidden` for updates of allowed documents when the `queryModifier` used a field from `serverOnlyFields` [#465](https://github.com/pubkey/rxdb-server/pull/465)
