@@ -1,19 +1,22 @@
 import assert from 'assert';
 
 import {
+    clone,
     ensureNotFalsy,
     lastOfArray,
     MangoQuery,
     randomToken
 } from 'rxdb/plugins/core';
 import {
-    createRxServer
+    createRxServer,
+    REST_PATHS
 } from '../../plugins/server';
 import {
     createRestClient
 } from '../../plugins/client-rest';
 import {
     schemaObjects,
+    schemas,
     humansCollection,
     HumanDocumentType,
     humanDefault
@@ -1016,6 +1019,99 @@ describe('endpoint-rest.test.ts', () => {
 
             const docsAfter = await col.find().exec();
             assert.deepStrictEqual(docsAfter.map(d => d.passportId), []);
+
+            await col.database.close();
+        });
+    });
+    describe('/patch', () => {
+        async function startPatchServer(col: any, withQueryModifier = false) {
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                queryModifier: withQueryModifier ? queryModifier : undefined
+            });
+            await server.start();
+            return createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+        }
+        it('should update the given fields and keep the others', async () => {
+            const col = await humansCollection.create(0);
+            const docBefore = await col.insert(schemaObjects.humanData('patch-doc', 30, headers.userid));
+            const client = await startPatchServer(col);
+
+            await client.patch([{ passportId: 'patch-doc', age: 31 } as any]);
+
+            const docAfter = await col.findOne('patch-doc').exec(true);
+            assert.strictEqual(docAfter.age, 31);
+            assert.strictEqual(docAfter.firstName, docBefore.firstName);
+            assert.strictEqual(docAfter.lastName, docBefore.lastName);
+
+            await col.database.close();
+        });
+        it('should insert new documents', async () => {
+            const col = await humansCollection.create(0);
+            const client = await startPatchServer(col);
+
+            const newDoc = schemaObjects.humanData('patch-new-doc', 20, headers.userid);
+            await client.patch([newDoc]);
+
+            const docAfter = await col.findOne('patch-new-doc').exec(true);
+            assert.deepStrictEqual(docAfter.toJSON(), newDoc);
+
+            await col.database.close();
+        });
+        it('should not allow patching a document the user does not own', async () => {
+            const col = await humansCollection.create(0);
+            await col.insert(schemaObjects.humanData('bob-patch-doc', 30, 'bob'));
+            const client = await startPatchServer(col, true);
+
+            const response = await fetch(client.endpointUrl + '/patch', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...headers
+                },
+                body: JSON.stringify([{
+                    passportId: 'bob-patch-doc',
+                    firstName: headers.userid,
+                    lastName: 'hacked'
+                }])
+            });
+            assert.strictEqual(response.status, 403);
+
+            const docAfter = await col.findOne('bob-patch-doc').exec(true);
+            assert.strictEqual(docAfter.firstName, 'bob');
+            assert.notStrictEqual(docAfter.lastName, 'hacked');
+
+            await col.database.close();
+        });
+        it('should give a 426 error on outdated versions', async () => {
+            const newestSchema = clone(schemas.human);
+            newestSchema.version = 1;
+            const col = await humansCollection.createBySchema(newestSchema, undefined, undefined, { 1: (d: any) => d });
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+
+            for (const path of ['', ...REST_PATHS]) {
+                const response = await fetch('http://localhost:' + port + '/' + endpoint.name + '/0/' + path);
+                assert.strictEqual(response.status, 426, path);
+            }
 
             await col.database.close();
         });

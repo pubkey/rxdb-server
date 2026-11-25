@@ -83,6 +83,16 @@ export class RxRestClient<RxDocType> {
         return response;
     }
 
+    async patch(docs: RxDocType[]) {
+        const response = await postRequest(
+            this.endpointUrl + '/patch',
+            docs,
+            this.headers
+        );
+        this.handleError(response);
+        return response;
+    }
+
     async delete(ids: string[]) {
         const response = await postRequest(
             this.endpointUrl + '/delete',

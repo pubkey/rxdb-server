@@ -8,7 +8,8 @@ import type { RxServer } from './rx-server.ts';
 import type {
     RxServerChangeValidator,
     RxServerEndpoint,
-    RxServerQueryModifier
+    RxServerQueryModifier,
+    RxServerRouteHandler
 } from './types.ts';
 import { concatMap, filter, takeWhile, tap } from 'rxjs';
 import {
@@ -33,6 +34,7 @@ export const REST_PATHS = [
     'query/observe',
     'get',
     'set',
+    'patch',
     'delete',
 
     // TODO
@@ -202,7 +204,7 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
             });
         });
 
-        this.server.adapter.post(this.server.serverApp, '/' + this.urlPath + '/set', async (req, res) => {
+        const setDocuments: RxServerRouteHandler = async (req, res) => {
             const authData = await getAuthDataByRequest(this.server, req, res);
             if (!authData) { return; }
 
@@ -286,7 +288,9 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
 
             adapter.setResponseHeader(res, 'Content-Type', 'application/json')
             adapter.endResponseJson(res, {});
-        });
+        };
+        this.server.adapter.post(this.server.serverApp, '/' + this.urlPath + '/set', setDocuments);
+        this.server.adapter.post(this.server.serverApp, '/' + this.urlPath + '/patch', setDocuments);
 
         this.server.adapter.post(this.server.serverApp, '/' + this.urlPath + '/delete', async (req, res) => {
             const authData = await getAuthDataByRequest(this.server, req, res);
@@ -361,6 +365,7 @@ export function blockPreviousReplicationVersionPathsRest(
             'query/observe',
             'get',
             'set',
+            'patch',
             'delete'
         ].forEach(subPath => {
             server.adapter.all(server.serverApp, '/' + path + '/' + version + '/' + subPath, (req, res) => {
