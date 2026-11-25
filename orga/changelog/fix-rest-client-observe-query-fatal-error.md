@@ -1,0 +1,1 @@
+- FIX `RxRestClient.observeQuery()` never emitted an error when the server rejected the stream permanently (for example with `401` after the auth expired), so the app kept the stale result forever

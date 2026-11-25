@@ -524,6 +524,45 @@ describe('endpoint-rest.test.ts', () => {
 
             await col.database.close();
         });
+        it('should emit an error when the auth of the open stream has expired', async function () {
+            this.timeout(10 * 1000);
+            const col = await humansCollection.create(1);
+            const port = await nextPort();
+            let authValid = true;
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler: (requestHeaders) => {
+                    if (!authValid) {
+                        throw new Error('auth expired');
+                    }
+                    return authHandler(requestHeaders);
+                },
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            const emitted: HumanDocumentType[][] = [];
+            const errors: Error[] = [];
+            client.observeQuery({}).subscribe({
+                next: result => emitted.push(result),
+                error: err => errors.push(err)
+            });
+            await waitUntil(() => emitted.length === 1);
+
+            authValid = false;
+            await col.insert(schemaObjects.humanData('doc1', 1, headers.userid));
+            await waitUntil(() => errors.length === 1, 8000);
+            assert.ok(errors[0].message.includes('401'));
+            assert.strictEqual(emitted.length, 1);
+
+            await col.database.close();
+        });
     });
     describe('/get', () => {
         it('should return the correct documents', async () => {
