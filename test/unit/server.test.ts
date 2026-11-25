@@ -291,6 +291,32 @@ describe('server.test.ts', () => {
             ]);
             await server.close();
         });
+        it('should reject start() when the port is already in use', async () => {
+            const port = await nextPort();
+            const col1 = await humansCollection.create(0);
+            const server1 = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col1.database,
+                authHandler,
+                port
+            });
+            await server1.start();
+
+            const col2 = await humansCollection.create(0);
+            const server2 = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col2.database,
+                authHandler,
+                port
+            });
+            await assert.rejects(
+                () => server2.start(),
+                (err: any) => err.code === 'EADDRINUSE'
+            );
+            await server2.close();
+            await col2.database.close();
+            await col1.database.close();
+        });
     });
     describe('.doesContainRegexQuerySelector()', () => {
         it('should return false', () => {

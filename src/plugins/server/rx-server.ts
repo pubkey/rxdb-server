@@ -98,7 +98,11 @@ export class RxServer<ServerAppType, AuthType> {
     async start() {
         this.ensureNotStarted();
         const hostname = this.options.hostname ? this.options.hostname : 'localhost';
-        this.listenPromise = this.options.adapter.listen(this.serverApp, this.options.port, hostname);
+        this.listenPromise = this.options.adapter.listen(this.serverApp, this.options.port, hostname)
+            .catch(err => {
+                this.listenPromise = undefined;
+                throw err;
+            });
         return this.listenPromise;
     }
 
