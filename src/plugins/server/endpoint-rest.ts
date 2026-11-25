@@ -132,7 +132,7 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
                     ensureNotFalsy(authData),
                     normalizeMangoQuery(
                         this.collection.schema.jsonSchema,
-                        JSON.parse(atob(adapter.getRequestQuery(req).query as string))
+                        JSON.parse(decodeQueryParam(adapter.getRequestQuery(req)))
                     )
                 );
             } catch (err) {
@@ -369,4 +369,12 @@ export function blockPreviousReplicationVersionPathsRest(
         });
         v++;
     }
+}
+
+function decodeQueryParam(urlQuery: { query: string; encoding?: string; }): string {
+    const binary = atob(urlQuery.query);
+    if (urlQuery.encoding !== 'utf8') {
+        return binary;
+    }
+    return new TextDecoder().decode(Uint8Array.from(binary, char => char.charCodeAt(0)));
 }

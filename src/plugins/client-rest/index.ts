@@ -37,10 +37,13 @@ export class RxRestClient<RxDocType> {
         // URL parser. Without encoding, the server's atob() then rejects
         // the corrupted string with "Invalid character" and the SSE
         // connection silently never delivers any document.
-        const queryAsBase64 = encodeURIComponent(btoa(JSON.stringify(query)));
+        const queryJson = JSON.stringify(query);
+        const queryParams = /^[\x00-\xff]*$/.test(queryJson)
+            ? encodeURIComponent(btoa(queryJson))
+            : encodeURIComponent(btoa(Array.from(new TextEncoder().encode(queryJson), byte => String.fromCharCode(byte)).join(''))) + '&encoding=utf8';
         return new Observable<RxDocType[]>(subscriber => {
             const eventSource: EventSource = new this.eventSource(
-                this.endpointUrl + '/query/observe?query=' + queryAsBase64,
+                this.endpointUrl + '/query/observe?query=' + queryParams,
                 {
                     withCredentials: true,
                     /**

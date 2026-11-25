@@ -487,6 +487,91 @@ describe('endpoint-rest.test.ts', () => {
             subscription.unsubscribe();
             await col.database.close();
         });
+        it('should observe queries that contain characters outside of Latin-1', async () => {
+            const names = ['日本', 'a😀', 'Привет'];
+            const col = await humansCollection.create(0);
+            await Promise.all(names.map((name, i) => col.insert(schemaObjects.humanData('doc' + i, i + 1, name))));
+            await col.insert(schemaObjects.humanData('other-doc', 10, 'normal'));
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            for (const [i, name] of names.entries()) {
+                const emitted: HumanDocumentType[][] = [];
+                const subscription = client.observeQuery({
+                    selector: { firstName: { $eq: name } }
+                }).subscribe(result => emitted.push(result));
+                await waitUntil(() => emitted.length === 1, 3000);
+                const last = ensureNotFalsy(lastOfArray(emitted));
+                assert.deepStrictEqual(last.map(d => d.passportId), ['doc' + i]);
+                subscription.unsubscribe();
+            }
+
+            await col.database.close();
+        });
+        it('should keep the Latin-1 query encoding of older clients', async () => {
+            const col = await humansCollection.create(0);
+            await col.insert(schemaObjects.humanData('match-doc', 1, 'Müller'));
+            await col.insert(schemaObjects.humanData('other-doc', 2, 'normal'));
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+
+            const queryAsBase64 = encodeURIComponent(btoa(JSON.stringify({
+                selector: { firstName: { $eq: 'Müller' } }
+            })));
+            const emitted: HumanDocumentType[][] = [];
+            const eventSource = new EventSource(
+                'http://localhost:' + port + '/' + endpoint.urlPath + '/query/observe?query=' + queryAsBase64,
+                { fetch: customFetchWithFixedHeaders(headers) }
+            );
+            eventSource.onmessage = event => emitted.push(JSON.parse(event.data));
+            await waitUntil(() => emitted.length === 1, 3000);
+            eventSource.close();
+            assert.deepStrictEqual(emitted[0].map(d => d.passportId), ['match-doc']);
+
+            const requestedUrls: string[] = [];
+            class RecordingEventSource extends EventSource {
+                constructor(url: string, init?: any) {
+                    requestedUrls.push(url);
+                    super(url, init);
+                }
+            }
+            const client = createRestClient<HumanDocumentType>(
+                'http://localhost:' + port + '/' + endpoint.urlPath,
+                headers,
+                RecordingEventSource
+            );
+            const clientEmitted: HumanDocumentType[][] = [];
+            const subscription = client.observeQuery({
+                selector: { firstName: { $eq: 'Müller' } }
+            }).subscribe(result => clientEmitted.push(result));
+            await waitUntil(() => clientEmitted.length === 1, 3000);
+            subscription.unsubscribe();
+            assert.deepStrictEqual(clientEmitted[0].map(d => d.passportId), ['match-doc']);
+            assert.strictEqual(new URL(requestedUrls[0]).search, '?query=' + queryAsBase64);
+
+            await col.database.close();
+        });
         it('should stop observing on the server when the client unsubscribes', async () => {
             const col = await humansCollection.create(1);
             const port = await nextPort();
