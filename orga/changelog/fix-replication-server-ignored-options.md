@@ -1,1 +1,1 @@
-- FIX `replicateServer()` ignored the `pull.initialCheckpoint`, `push.initialCheckpoint` and `push.waitBeforePersist` options
+- FIX `replicateServer()` ignored the `pull.initialCheckpoint`, `push.initialCheckpoint` and `push.waitBeforePersist` options [#469](https://github.com/pubkey/rxdb-server/pull/469)
