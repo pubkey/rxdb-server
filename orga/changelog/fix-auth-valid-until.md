@@ -1,0 +1,1 @@
+- FIX RxServer did not check `validUntil` of the auth data. Requests with an expired `validUntil` are now answered with `401 Unauthorized`, and open streams are ended at their next event

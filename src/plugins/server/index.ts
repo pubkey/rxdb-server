@@ -15,11 +15,18 @@ export async function createRxServer<ServerAdapterType, AuthType>(
     if (!options.serverApp) {
         options.serverApp = await options.adapter.create();
     }
-    const authHandler: RxServerAuthHandler<AuthType> = options.authHandler ? options.authHandler : () => {
+    const userAuthHandler: RxServerAuthHandler<AuthType> = options.authHandler ? options.authHandler : () => {
         return {
             data: {} as any,
             validUntil: Date.now() * 2
         };
+    };
+    const authHandler: RxServerAuthHandler<AuthType> = async (headers) => {
+        const authData = await userAuthHandler(headers);
+        if (authData.validUntil <= Date.now()) {
+            throw new Error('auth data expired');
+        }
+        return authData;
     };
 
     const server = new RxServer<ServerAdapterType, AuthType>(
