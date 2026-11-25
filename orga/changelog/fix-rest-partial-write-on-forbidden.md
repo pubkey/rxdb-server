@@ -1,0 +1,1 @@
+- FIX REST endpoint `/set` and `/delete` wrote or deleted the documents before a forbidden document of the same request was checked, so a request answered with `403 Forbidden` had already applied the earlier documents [#460](https://github.com/pubkey/rxdb-server/pull/460)

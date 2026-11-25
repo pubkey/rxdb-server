@@ -19,7 +19,7 @@ import {
     humanDefault
 } from 'rxdb/plugins/test-utils';
 import { nextPort } from './test-helpers.ts';
-import { assertThrows, waitUntil } from 'async-test-util';
+import { assertThrows, wait, waitUntil } from 'async-test-util';
 
 import config from './config.ts';
 import {
@@ -706,6 +706,39 @@ describe('endpoint-rest.test.ts', () => {
 
             await col.database.close();
         });
+        it('should not write any document when one document of the request is not allowed', async () => {
+            const col = await humansCollection.create(0);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                changeValidator: (_authData, change) => change.newDocumentState.lastName !== 'forbidden'
+            });
+            await server.start();
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            const allowedDoc = schemaObjects.humanData('allowed-doc', 1, headers.userid);
+            const forbiddenDoc = schemaObjects.humanData('forbidden-doc', 1, headers.userid);
+            forbiddenDoc.lastName = 'forbidden';
+
+            await assertThrows(
+                () => client.set([allowedDoc, forbiddenDoc]),
+                Error,
+                'error'
+            );
+            await wait(100);
+
+            const docsAfter = await col.find().exec();
+            assert.deepStrictEqual(docsAfter.map(d => d.passportId), []);
+
+            await col.database.close();
+        });
     });
     describe('/delete', () => {
         it('should delete the documents', async () => {
@@ -802,6 +835,37 @@ describe('endpoint-rest.test.ts', () => {
             // must still be the same because write must not be accepted
             const docsAfter = await col.find().exec();
             assert.strictEqual(docsAfter.length, 5);
+
+            await col.database.close();
+        });
+        it('should not delete any document when one document of the request is not allowed', async () => {
+            const col = await humansCollection.create(0);
+            const ownDoc = await col.insert(schemaObjects.humanData('own-doc', 1, headers.userid));
+            const foreignDoc = await col.insert(schemaObjects.humanData('foreign-doc', 1, 'bob'));
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                queryModifier
+            });
+            await server.start();
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            await assertThrows(
+                () => client.delete([ownDoc.primary, foreignDoc.primary]),
+                Error,
+                'error'
+            );
+            await wait(100);
+
+            const docsAfter = await col.find().exec();
+            assert.deepStrictEqual(docsAfter.map(d => d.passportId).sort(), ['foreign-doc', 'own-doc']);
 
             await col.database.close();
         });
