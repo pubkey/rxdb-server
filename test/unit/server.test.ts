@@ -261,6 +261,36 @@ describe('server.test.ts', () => {
 
             await col.database.close();
         });
+        it('should resolve close() after the database was closed', async () => {
+            const port = await nextPort();
+            const col = await humansCollection.create(0);
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            await server.start();
+            await col.database.close();
+            await server.close();
+        });
+        it('should resolve when close() is called multiple times', async () => {
+            const port = await nextPort();
+            const col = await humansCollection.create(0);
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            await server.start();
+            await Promise.all([
+                server.close(),
+                server.close(),
+                col.database.close()
+            ]);
+            await server.close();
+        });
     });
     describe('.doesContainRegexQuerySelector()', () => {
         it('should return false', () => {

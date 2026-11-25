@@ -18,6 +18,7 @@ export class RxServer<ServerAppType, AuthType> {
 
     private closeFn = (() => this.close()).bind(this);
     public listenPromise?: Promise<void>;
+    private closePromise?: Promise<void>;
 
     public readonly database: RxDatabase;
     public readonly adapter: RxServerAdapter<ServerAppType>;
@@ -104,12 +105,16 @@ export class RxServer<ServerAppType, AuthType> {
     async close() {
         this.database.onClose = this.database.onClose.filter(fn => fn !== this.closeFn);
         if (this.listenPromise) {
-            await this.listenPromise;
-            const closePromise = this.options.adapter.close(this.serverApp);
-            await Promise.all([
-                closePromise,
-                this.options.adapter.closeAllConnections(this.serverApp)
-            ]);
+            if (!this.closePromise) {
+                this.closePromise = this.listenPromise.then(async () => {
+                    const adapterClosePromise = this.options.adapter.close(this.serverApp);
+                    await Promise.all([
+                        adapterClosePromise,
+                        this.options.adapter.closeAllConnections(this.serverApp)
+                    ]);
+                });
+            }
+            await this.closePromise;
         }
     }
 }
