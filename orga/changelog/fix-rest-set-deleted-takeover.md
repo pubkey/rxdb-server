@@ -1,0 +1,1 @@
+- FIX REST `/set` allowed a client to revive and take over a deleted document that its `queryModifier` does not allow [#466](https://github.com/pubkey/rxdb-server/pull/466)

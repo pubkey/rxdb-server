@@ -216,7 +216,13 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
 
             while (docsData.length > 0) {
                 const writes: (() => Promise<any>)[] = [];
-                const docs = await collection.findByIds(docsData.map(d => (d as any)[primaryPath])).exec();
+                const ids = docsData.map(d => (d as any)[primaryPath]);
+                const docs = await collection.findByIds(ids).exec();
+                const storedDocs = await collection.storageInstance.findDocumentsById(ids, true);
+                if (storedDocs.some(d => !docDataMatcherWrite(d as any))) {
+                    adapter.closeConnection(res, 403, 'Forbidden');
+                    return;
+                }
                 let useDocsData = docsData.slice();
                 docsData = [];
                 for (const docData of useDocsData) {
@@ -253,15 +259,6 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
                         }
                         writes.push(() => this.collection.insert(mergedDocData).catch(err => onWriteError(err, mergedDocData)));
                     } else {
-                        // The user must also be allowed to access the existing document.
-                        // Without this check, a client could overwrite arbitrary
-                        // documents by sending a write whose new state matches the
-                        // queryModifier while targeting a foreign document's primary.
-                        const isExistingDocAllowed = docDataMatcherWrite(doc.toJSON(true) as any);
-                        if (!isExistingDocAllowed) {
-                            adapter.closeConnection(res, 403, 'Forbidden');
-                            return;
-                        }
                         const isAllowed = this.changeValidator(authData, {
                             newDocumentState: removeServerOnlyFields(docData as any),
                             assumedMasterState: removeServerOnlyFields(doc.toJSON(true))
