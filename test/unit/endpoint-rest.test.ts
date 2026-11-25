@@ -398,6 +398,43 @@ describe('endpoint-rest.test.ts', () => {
             subscription.unsubscribe();
             await col.database.close();
         });
+        it('should stop observing on the server when the client unsubscribes', async () => {
+            const col = await humansCollection.create(1);
+            const port = await nextPort();
+            let authCalls = 0;
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler: (requestHeaders) => {
+                    authCalls++;
+                    return authHandler(requestHeaders);
+                },
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            const emitted: HumanDocumentType[][] = [];
+            const subscription = client.observeQuery({}).subscribe(result => emitted.push(result));
+            await waitUntil(() => emitted.length === 1);
+            subscription.unsubscribe();
+            await wait(300);
+
+            const authCallsAfterUnsubscribe = authCalls;
+            await col.insert(schemaObjects.humanData('doc1', 1, headers.userid));
+            await wait(300);
+            assert.strictEqual(
+                authCalls,
+                authCallsAfterUnsubscribe,
+                'the server must not run the observed query after the client unsubscribed'
+            );
+
+            await col.database.close();
+        });
     });
     describe('/get', () => {
         it('should return the correct documents', async () => {

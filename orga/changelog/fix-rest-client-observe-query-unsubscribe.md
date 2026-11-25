@@ -1,0 +1,1 @@
+- FIX `RxRestClient.observeQuery()` did not close its EventSource on unsubscribe, so the SSE connection and the query on the server stayed open forever [#461](https://github.com/pubkey/rxdb-server/pull/461)
