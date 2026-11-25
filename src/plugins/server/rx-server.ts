@@ -105,7 +105,11 @@ export class RxServer<ServerAppType, AuthType> {
         this.database.onClose = this.database.onClose.filter(fn => fn !== this.closeFn);
         if (this.listenPromise) {
             await this.listenPromise;
-            await this.options.adapter.close(this.serverApp);
+            const closePromise = this.options.adapter.close(this.serverApp);
+            await Promise.all([
+                closePromise,
+                this.options.adapter.closeAllConnections(this.serverApp)
+            ]);
         }
     }
 }
