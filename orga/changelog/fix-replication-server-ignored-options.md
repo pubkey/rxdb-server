@@ -1,0 +1,1 @@
+- FIX `replicateServer()` ignored the `pull.initialCheckpoint`, `push.initialCheckpoint` and `push.waitBeforePersist` options
