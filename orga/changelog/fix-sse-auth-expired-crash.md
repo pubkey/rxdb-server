@@ -1,0 +1,1 @@
+- FIX RxServer crashed with an unhandled rejection when the auth of an open `/pullStream` or `/query/observe` stream became invalid. The stream is now ended so that the client reconnects and gets a 401. [#463](https://github.com/pubkey/rxdb-server/pull/463)

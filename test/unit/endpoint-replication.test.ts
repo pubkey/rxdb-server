@@ -25,7 +25,7 @@ import {
     HumanDocumentType,
     humanDefault
 } from 'rxdb/plugins/test-utils';
-import { nextPort } from './test-helpers.ts';
+import { nextPort, customFetchWithFixedHeaders } from './test-helpers.ts';
 import { wait, waitUntil } from 'async-test-util';
 import { EventSource } from 'eventsource';
 
@@ -540,6 +540,48 @@ describe('endpoint-replication.test.ts', () => {
             assert.strictEqual(tracked.open.size, 0);
             await col.database.close();
             await clientCol.database.close();
+        });
+        it('should disconnect an open /pullStream when the auth becomes invalid', async function () {
+            this.timeout(10 * 1000);
+            const col = await humansCollection.create(1);
+            const port = await nextPort();
+            let isValid = true;
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler: (requestHeaders) => {
+                    if (!isValid) {
+                        throw new Error('auth expired');
+                    }
+                    return authHandler(requestHeaders);
+                },
+                port
+            });
+            const endpoint = await server.addReplicationEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+
+            const url = 'http://localhost:' + port + '/' + endpoint.urlPath + '/pullStream';
+            const eventSource = new EventSource(url, { fetch: customFetchWithFixedHeaders(headers) });
+            const errorCodes: (number | undefined)[] = [];
+            eventSource.onerror = (err) => errorCodes.push(err.code);
+            await waitUntil(() => eventSource.readyState === eventSource.OPEN);
+
+            isValid = false;
+            await col.insert(schemaObjects.humanData());
+
+            // the stream ends, so the client starts to reconnect
+            await waitUntil(() => errorCodes.length > 0);
+            assert.strictEqual(eventSource.readyState, eventSource.CONNECTING);
+
+            // the reconnect is answered with a 401
+            await waitUntil(() => errorCodes.includes(401), 8000);
+            assert.strictEqual(eventSource.readyState, eventSource.CLOSED);
+
+            eventSource.close();
+            await col.database.close();
         });
         it('should have access-control-allow-credentials set to true for /pull and /pullStream', async () => {
             const col = await humansCollection.create(5);
@@ -1366,17 +1408,3 @@ describe('endpoint-replication.test.ts', () => {
         });
     });
 });
-export function customFetchWithFixedHeaders(headers: any) {
-    function customFetch(url: string | URL, options: any = {}) {
-        // Ensure options object exists and headers property is initialized
-        options.headers = {
-            ...headers,              // include default custom headers
-            ...(options.headers || {})            // merge any headers passed in the function call
-        };
-
-        // Call the original fetch with the modified options
-        return fetch(url, options);
-    }
-    return customFetch;
-}
-
