@@ -16,7 +16,7 @@ import type {
     RxServerEndpoint,
     RxServerQueryModifier
 } from './types.ts';
-import { filter, mergeMap } from 'rxjs';
+import { concatMap, filter } from 'rxjs';
 import {
     ensureNotFalsy,
     lastOfArray
@@ -223,7 +223,7 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
             adapter.setSSEHeaders(res);
             const docDataMatcherStream = getDocAllowedMatcher(this, ensureNotFalsy(authData));
             const subscription = replicationHandler.masterChangeStream$.pipe(
-                mergeMap(async (changes) => {
+                concatMap(async (changes) => {
                     /**
                      * The auth-data might be expired
                      * so we re-run the auth parsing each time

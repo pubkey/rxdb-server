@@ -10,7 +10,7 @@ import type {
     RxServerEndpoint,
     RxServerQueryModifier
 } from './types.ts';
-import { filter, mergeMap } from 'rxjs';
+import { concatMap, filter } from 'rxjs';
 import {
     ensureNotFalsy,
     getFromMapOrThrow
@@ -144,7 +144,7 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
 
             const rxQuery = this.collection.find(useQuery as any);
             const subscription = rxQuery.$.pipe(
-                mergeMap(async (result) => {
+                concatMap(async (result) => {
                     const resultData = result.map(doc => removeServerOnlyFields(doc.toJSON()));
 
                     /**

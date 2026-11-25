@@ -226,6 +226,48 @@ describe('endpoint-rest.test.ts', () => {
 
             await col.database.close();
         });
+        it('should emit the newest result last when the authHandler has a varying latency', async () => {
+            const col = await humansCollection.create(0);
+            const port = await nextPort();
+            let streamAuthCalls = 0;
+            let slowAuthDone = false;
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler: async (requestHeaders) => {
+                    if (requestHeaders.accept === 'text/event-stream') {
+                        streamAuthCalls++;
+                        if (streamAuthCalls === 3) {
+                            await wait(300);
+                            slowAuthDone = true;
+                        }
+                    }
+                    return authHandler(requestHeaders);
+                },
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+            const emitted: HumanDocumentType[][] = [];
+            client.observeQuery({}).subscribe(result => emitted.push(result));
+            await waitUntil(() => emitted.length === 1);
+
+            const doc = await col.insert(schemaObjects.humanData('order-doc', 1, 'v1'));
+            await doc.incrementalPatch({ firstName: 'v2' });
+
+            await waitUntil(() => slowAuthDone && emitted.length === 3);
+            await wait(100);
+
+            const last = ensureNotFalsy(lastOfArray(emitted));
+            assert.deepStrictEqual(last.map(d => d.firstName), ['v2']);
+
+            await col.database.close();
+        });
         it('should should automatically reconnect', async function () {
             this.timeout(10 * 1000);
             const col = await humansCollection.create(5);

@@ -268,6 +268,61 @@ describe('endpoint-replication.test.ts', () => {
             col.database.close();
             clientCol.database.close();
         });
+        it('should replicate the newest document state when the authHandler has a varying latency', async () => {
+            const col = await humansCollection.create(0);
+            const port = await nextPort();
+            let streamAuthCalls = 0;
+            let slowAuthDone = false;
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler: async (requestHeaders) => {
+                    if (requestHeaders.accept === 'text/event-stream') {
+                        streamAuthCalls++;
+                        if (streamAuthCalls === 2) {
+                            await wait(300);
+                            slowAuthDone = true;
+                        }
+                    }
+                    return authHandler(requestHeaders);
+                },
+                port
+            });
+            const endpoint = await server.addReplicationEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+
+            const clientCol = await humansCollection.create(0);
+            const replicationState = replicateServer({
+                collection: clientCol,
+                replicationIdentifier: randomToken(10),
+                url: 'http://localhost:' + port + '/' + endpoint.urlPath,
+                headers,
+                live: true,
+                push: {},
+                pull: {},
+                eventSource: EventSource
+            });
+            ensureReplicationHasNoErrors(replicationState);
+            await replicationState.awaitInSync();
+            await waitUntil(() => streamAuthCalls === 1);
+
+            const doc = await col.insert(schemaObjects.humanData('order-doc', 1, 'v1'));
+            await doc.incrementalPatch({ firstName: 'v2' });
+
+            await waitUntil(() => slowAuthDone && streamAuthCalls === 3);
+            await replicationState.awaitInSync();
+            await wait(200);
+
+            const clientDoc = await clientCol.findOne('order-doc').exec(true);
+            assert.strictEqual(clientDoc.firstName, 'v2');
+
+            await replicationState.cancel();
+            await col.database.close();
+            await clientCol.database.close();
+        });
     });
     describe('authentification', () => {
         it('should drop non authenticated clients', async () => {
