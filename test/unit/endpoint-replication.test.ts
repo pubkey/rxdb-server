@@ -34,6 +34,27 @@ import { AuthType, authHandler, headers, urlSubPaths } from './test-helpers.ts';
 import { TEST_SERVER_ADAPTER } from './config-server.test.ts';
 
 
+function trackedEventSource() {
+    const open = new Set<EventSource>();
+    let created = 0;
+    class TrackedEventSource extends EventSource {
+        constructor(...args: ConstructorParameters<typeof EventSource>) {
+            super(...args);
+            created++;
+            open.add(this);
+        }
+        override close() {
+            open.delete(this);
+            super.close();
+        }
+    }
+    return {
+        EventSourceClass: TrackedEventSource,
+        open,
+        getCreatedCount: () => created
+    };
+}
+
 describe('endpoint-replication.test.ts', () => {
     assert.ok(config);
     describe('basics', () => {
@@ -268,6 +289,95 @@ describe('endpoint-replication.test.ts', () => {
             col.database.close();
             clientCol.database.close();
         });
+        it('should keep only one open EventSource after pause() and start()', async () => {
+            const col = await humansCollection.create(1);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addReplicationEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+
+            const tracked = trackedEventSource();
+            const clientCol = await humansCollection.create(0);
+            const replicationState = replicateServer({
+                collection: clientCol,
+                replicationIdentifier: randomToken(10),
+                url: 'http://localhost:' + port + '/' + endpoint.urlPath,
+                headers,
+                live: true,
+                push: {},
+                pull: {},
+                eventSource: tracked.EventSourceClass
+            });
+            ensureReplicationHasNoErrors(replicationState);
+            await replicationState.awaitInSync();
+            assert.strictEqual(tracked.open.size, 1);
+
+            await replicationState.pause();
+            assert.strictEqual(tracked.open.size, 0);
+
+            await replicationState.start();
+            await replicationState.awaitInSync();
+            assert.strictEqual(tracked.open.size, 1);
+
+            await col.insert(schemaObjects.humanData('after-restart'));
+            await waitUntil(async () => {
+                const docs = await clientCol.find().exec();
+                return docs.length === 2;
+            });
+
+            await replicationState.cancel();
+            assert.strictEqual(tracked.open.size, 0);
+            await col.database.close();
+            await clientCol.database.close();
+        });
+        it('should not open an EventSource when start() is called while cancel() is running', async () => {
+            const col = await humansCollection.create(1);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addReplicationEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+
+            const tracked = trackedEventSource();
+            const clientCol = await humansCollection.create(0);
+            const replicationState = replicateServer({
+                collection: clientCol,
+                replicationIdentifier: randomToken(10),
+                url: 'http://localhost:' + port + '/' + endpoint.urlPath,
+                headers,
+                live: true,
+                push: {},
+                pull: {},
+                eventSource: tracked.EventSourceClass
+            });
+            await replicationState.awaitInSync();
+
+            const cancelPromise = replicationState.cancel();
+            await Promise.resolve();
+            await Promise.resolve();
+            await replicationState.start().catch(() => { });
+            await cancelPromise;
+            await wait(20);
+
+            assert.strictEqual(tracked.open.size, 0);
+            await col.database.close();
+            await clientCol.database.close();
+        });
         it('should replicate the newest document state when the authHandler has a varying latency', async () => {
             const col = await humansCollection.create(0);
             const port = await nextPort();
@@ -389,6 +499,47 @@ describe('endpoint-replication.test.ts', () => {
             await replicationState.cancel();
             col.database.close();
             clientCol.database.close();
+        });
+        it('should not open a new EventSource after cancel() while retrying on 401', async () => {
+            const col = await humansCollection.create(1);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addReplicationEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+
+            const tracked = trackedEventSource();
+            const clientCol = await humansCollection.create(0);
+            const replicationState = replicateServer({
+                collection: clientCol,
+                replicationIdentifier: randomToken(10),
+                url: 'http://localhost:' + port + '/' + endpoint.urlPath,
+                headers: {},
+                live: true,
+                push: {},
+                pull: {},
+                eventSource: tracked.EventSourceClass,
+                retryTime: 50
+            });
+            let emittedUnauthorized = false;
+            replicationState.unauthorized$.subscribe(() => emittedUnauthorized = true);
+            await waitUntil(() => emittedUnauthorized === true);
+
+            await replicationState.cancel();
+            const createdOnCancel = tracked.getCreatedCount();
+            await wait(300);
+
+            assert.strictEqual(tracked.getCreatedCount(), createdOnCancel);
+            assert.strictEqual(tracked.open.size, 0);
+            await col.database.close();
+            await clientCol.database.close();
         });
         it('should have access-control-allow-credentials set to true for /pull and /pullStream', async () => {
             const col = await humansCollection.create(5);

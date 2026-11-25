@@ -150,10 +150,10 @@ export function replicateServer<RxDocType>(
      * Use long polling to get live changes for the pull.stream$
      */
     if (options.live && options.pull) {
-        const startBefore = replicationState.start.bind(replicationState);
-        replicationState.start = async () => {
-            const useEventSource: typeof EventSource = options.eventSource ? options.eventSource : EventSource;
+        const useEventSource: typeof EventSource = options.eventSource ? options.eventSource : EventSource;
+        const openEventSource = () => {
             let eventSource: EventSource;
+            let closed = false;
             const refreshEventSource = () => {
                 eventSource = new useEventSource(options.url + '/pullStream', {
                     withCredentials: true,
@@ -170,7 +170,11 @@ export function replicateServer<RxDocType>(
                     if (err.code === 401) {
                         replicationState.unauthorized$.next();
                         eventSource.close();
-                        promiseWait(replicationState.retryTime).then(() => refreshEventSource());
+                        promiseWait(replicationState.retryTime).then(() => {
+                            if (!closed) {
+                                refreshEventSource();
+                            }
+                        });
                     } else {
                         pullStream$.next('RESYNC');
                     }
@@ -187,9 +191,37 @@ export function replicateServer<RxDocType>(
                 };
             }
             refreshEventSource();
+            return () => {
+                closed = true;
+                eventSource.close();
+            };
+        };
 
-            replicationState.onCancel.push(() => eventSource && eventSource.close());
+        let closeEventSource: (() => void) | undefined;
+        let canceled = false;
+        const stopEventSource = () => {
+            if (closeEventSource) {
+                closeEventSource();
+                closeEventSource = undefined;
+            }
+        };
+        const startBefore = replicationState.start.bind(replicationState);
+        const pauseBefore = replicationState.pause.bind(replicationState);
+        replicationState.start = () => {
+            if (!closeEventSource && !canceled) {
+                closeEventSource = openEventSource();
+            }
             return startBefore();
+        };
+        replicationState.pause = () => {
+            stopEventSource();
+            return pauseBefore();
+        };
+        const cancelBefore = replicationState.cancel.bind(replicationState);
+        replicationState.cancel = () => {
+            canceled = true;
+            stopEventSource();
+            return cancelBefore();
         };
     }
 

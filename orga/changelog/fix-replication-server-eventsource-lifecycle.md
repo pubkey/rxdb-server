@@ -1,0 +1,1 @@
+- FIX `replicateServer()` opened a second EventSource on every `start()` after `pause()`, kept it open while paused, and reopened it after `cancel()` when the `/pullStream` was retried after a 401 error [#464](https://github.com/pubkey/rxdb-server/pull/464)
