@@ -1,1 +1,1 @@
-- FIX REST `/query` and `/query/observe` allowed clients to filter and sort by `serverOnlyFields`, which revealed which documents have a given value in a field they cannot see. Such queries are now answered with `400 Bad Request`.
+- FIX REST `/query` and `/query/observe` allowed clients to filter and sort by `serverOnlyFields`, which revealed which documents have a given value in a field they cannot see. Such queries are now answered with `400 Bad Request`. [#475](https://github.com/pubkey/rxdb-server/pull/475)
