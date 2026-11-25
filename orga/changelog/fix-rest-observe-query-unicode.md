@@ -1,1 +1,1 @@
-- FIX `RxRestClient.observeQuery()` threw `InvalidCharacterError` for queries with characters outside of Latin-1 (for example Japanese, Cyrillic or emoji)
+- FIX `RxRestClient.observeQuery()` threw `InvalidCharacterError` for queries with characters outside of Latin-1 (for example Japanese, Cyrillic or emoji) [#474](https://github.com/pubkey/rxdb-server/pull/474)
