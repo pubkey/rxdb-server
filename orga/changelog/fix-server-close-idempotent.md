@@ -1,1 +1,1 @@
-- FIX `RxServer.close()` rejected with `ERR_SERVER_NOT_RUNNING` when the server was already closed, for example by closing its database first or by calling `close()` twice
+- FIX `RxServer.close()` rejected with `ERR_SERVER_NOT_RUNNING` when the server was already closed, for example by closing its database first or by calling `close()` twice [#470](https://github.com/pubkey/rxdb-server/pull/470)
