@@ -433,6 +433,132 @@ describe('endpoint-replication.test.ts', () => {
             await col.database.close();
             await clientCol.database.close();
         });
+        it('should start the pull from pull.initialCheckpoint', async () => {
+            const col = await humansCollection.create(5);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addReplicationEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+            const url = 'http://localhost:' + port + '/' + endpoint.urlPath;
+            const firstBatch = await (await fetch(url + '/pull?lwt=0&id=&limit=3', { headers })).json();
+            assert.strictEqual(firstBatch.documents.length, 3);
+
+            const clientCol = await humansCollection.create(0);
+            const replicationState = replicateServer({
+                collection: clientCol,
+                replicationIdentifier: randomToken(10),
+                url,
+                headers,
+                live: false,
+                pull: {
+                    initialCheckpoint: firstBatch.checkpoint
+                },
+                eventSource: EventSource
+            });
+            ensureReplicationHasNoErrors(replicationState);
+            await replicationState.awaitInitialReplication();
+
+            const clientDocs = await clientCol.find().exec();
+            assert.strictEqual(clientDocs.length, 2);
+
+            await replicationState.cancel();
+            await col.database.close();
+            await clientCol.database.close();
+        });
+        it('should start the push from push.initialCheckpoint', async () => {
+            const col = await humansCollection.create(0);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addReplicationEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+
+            const clientCol = await humansCollection.create(0);
+            await clientCol.insert(schemaObjects.humanData('a-old', 1));
+            const lastOldDoc = await clientCol.insert(schemaObjects.humanData('b-old', 1));
+            const lastOldDocData = lastOldDoc.toJSON(true);
+            await wait(5);
+            await clientCol.insert(schemaObjects.humanData('c-new', 1));
+
+            const replicationState = replicateServer({
+                collection: clientCol,
+                replicationIdentifier: randomToken(10),
+                url: 'http://localhost:' + port + '/' + endpoint.urlPath,
+                headers,
+                live: false,
+                push: {
+                    initialCheckpoint: {
+                        id: lastOldDocData.passportId,
+                        lwt: lastOldDocData._meta.lwt
+                    }
+                }
+            });
+            ensureReplicationHasNoErrors(replicationState);
+            await replicationState.awaitInitialReplication();
+
+            const serverDocs = await col.find().exec();
+            assert.deepStrictEqual(serverDocs.map(d => d.primary).sort(), ['c-new']);
+
+            await replicationState.cancel();
+            await col.database.close();
+            await clientCol.database.close();
+        });
+        it('should call push.waitBeforePersist before pushing ongoing changes', async () => {
+            const col = await humansCollection.create(0);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addReplicationEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+
+            const clientCol = await humansCollection.create(0);
+            let waitBeforePersistCalls = 0;
+            const replicationState = replicateServer({
+                collection: clientCol,
+                replicationIdentifier: randomToken(10),
+                url: 'http://localhost:' + port + '/' + endpoint.urlPath,
+                headers,
+                live: true,
+                push: {
+                    waitBeforePersist: () => {
+                        waitBeforePersistCalls++;
+                        return Promise.resolve();
+                    }
+                }
+            });
+            ensureReplicationHasNoErrors(replicationState);
+            await replicationState.awaitInSync();
+
+            await clientCol.insert(schemaObjects.humanData('live-doc', 1));
+            await waitUntil(async () => (await col.find().exec()).length === 1);
+            assert.ok(waitBeforePersistCalls > 0);
+
+            await replicationState.cancel();
+            await col.database.close();
+            await clientCol.database.close();
+        });
     });
     describe('authentification', () => {
         it('should drop non authenticated clients', async () => {

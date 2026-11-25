@@ -1,5 +1,4 @@
 import {
-    ensureNotFalsy,
     flatClone,
     promiseWait,
     RxCollection,
@@ -90,6 +89,7 @@ export function replicateServer<RxDocType>(
     let replicationPrimitivesPull: ReplicationPullOptions<RxDocType, RxServerCheckpoint> | undefined;
     if (options.pull) {
         replicationPrimitivesPull = {
+            ...options.pull,
             async handler(checkpointOrNull, batchSize) {
                 const lwt = checkpointOrNull && checkpointOrNull.lwt ? checkpointOrNull.lwt : 0;
                 const id = checkpointOrNull && checkpointOrNull.id ? checkpointOrNull.id : '';
@@ -108,8 +108,6 @@ export function replicateServer<RxDocType>(
                     checkpoint: data.checkpoint
                 };
             },
-            batchSize: ensureNotFalsy(options.pull).batchSize,
-            modifier: ensureNotFalsy(options.pull).modifier,
             stream$: pullStream$.asObservable()
         };
     }
@@ -117,6 +115,7 @@ export function replicateServer<RxDocType>(
     let replicationPrimitivesPush: ReplicationPushOptions<RxDocType> | undefined;
     if (options.push) {
         replicationPrimitivesPush = {
+            ...options.push,
             async handler(changeRows) {
                 const response = await fetch(options.url + '/push', {
                     method: 'POST',
@@ -129,9 +128,7 @@ export function replicateServer<RxDocType>(
                 });
                 const conflictsArray = await parseResponse(replicationState, response);
                 return conflictsArray;
-            },
-            batchSize: options.push.batchSize,
-            modifier: options.push.modifier
+            }
         };
     }
 
