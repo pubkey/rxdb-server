@@ -785,6 +785,75 @@ describe('endpoint-rest.test.ts', () => {
 
             await col.database.close();
         });
+        it('should not allow reviving a deleted document the user does not own', async () => {
+            const col = await humansCollection.create(0);
+            const bobDoc = await col.insert(schemaObjects.humanData('bob-deleted-doc', 30, 'bob'));
+            await bobDoc.remove();
+
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                queryModifier
+            });
+            await server.start();
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            await assertThrows(
+                () => client.set([{
+                    passportId: 'bob-deleted-doc',
+                    firstName: headers.userid,
+                    lastName: 'hacked',
+                    age: 99
+                }]),
+                Error,
+                'error'
+            );
+            await wait(100);
+
+            const docAfter = await col.findOne('bob-deleted-doc').exec();
+            assert.strictEqual(docAfter, null);
+
+            await col.database.close();
+        });
+        it('should allow reviving an own deleted document', async () => {
+            const col = await humansCollection.create(0);
+            const ownDoc = await col.insert(schemaObjects.humanData('own-deleted-doc', 30, headers.userid));
+            await ownDoc.remove();
+
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                queryModifier
+            });
+            await server.start();
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            await client.set([{
+                passportId: 'own-deleted-doc',
+                firstName: headers.userid,
+                lastName: 'revived',
+                age: 99
+            }]);
+
+            const docAfter = await col.findOne('own-deleted-doc').exec(true);
+            assert.strictEqual(docAfter.lastName, 'revived');
+
+            await col.database.close();
+        });
         it('should not write any document when one document of the request is not allowed', async () => {
             const col = await humansCollection.create(0);
             const port = await nextPort();
