@@ -223,7 +223,7 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
             }
 
             while (docsData.length > 0) {
-                const promises: Promise<any>[] = [];
+                const writes: (() => Promise<any>)[] = [];
                 const docs = await collection.findByIds(docsData.map(d => (d as any)[primaryPath])).exec();
                 let useDocsData = docsData.slice();
                 docsData = [];
@@ -255,7 +255,7 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
                         const mergedDocData = stripServerOnlyFields(
                             mergeServerDocumentFields(docData, undefined) as RxDocType
                         );
-                        promises.push(this.collection.insert(mergedDocData).catch(err => onWriteError(err, mergedDocData)));
+                        writes.push(() => this.collection.insert(mergedDocData).catch(err => onWriteError(err, mergedDocData)));
                     } else {
                         // The user must also be allowed to access the existing document.
                         // Without this check, a client could overwrite arbitrary
@@ -275,10 +275,10 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
                             return;
                         }
                         const mergedDocData = mergeServerDocumentFields(docData, doc.toJSON(true) as any);
-                        promises.push(doc.patch(mergedDocData).catch(err => onWriteError(err, mergedDocData)));
+                        writes.push(() => doc.patch(mergedDocData).catch(err => onWriteError(err, mergedDocData)));
                     }
                 }
-                await Promise.all(promises);
+                await Promise.all(writes.map(write => write()));
             }
 
             adapter.setResponseHeader(res, 'Content-Type', 'application/json')
@@ -295,7 +295,7 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
             while (ids.length > 0) {
                 const useIds = ids.slice(0);
                 ids = [];
-                const promises: Promise<any>[] = [];
+                const writes: (() => Promise<any>)[] = [];
                 const docsMap = await this.collection.findByIds(useIds).exec();
                 for (const id of useIds) {
                     const doc = docsMap.get(id);
@@ -315,7 +315,7 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
                             return;
                         }
 
-                        promises.push(doc.remove().catch((err: RxError) => {
+                        writes.push(() => doc.remove().catch((err: RxError) => {
                             if (err.rxdb && err.code === 'CONFLICT') {
                                 // just retry on conflicts
                                 ids.push(id);
@@ -326,7 +326,7 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
                         }));
                     }
                 }
-                await Promise.all(promises);
+                await Promise.all(writes.map(write => write()));
             }
             adapter.setResponseHeader(res, 'Content-Type', 'application/json');
             adapter.endResponseJson(res, {});
