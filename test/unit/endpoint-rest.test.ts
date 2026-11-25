@@ -1104,6 +1104,39 @@ describe('endpoint-rest.test.ts', () => {
 
             await col.database.close();
         });
+        it('should allow /set updates when the queryModifier uses a serverOnlyField', async () => {
+            const col = await humansCollection.create(0);
+            await col.insert({ ...schemaObjects.humanData('owned'), age: 42 });
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                queryModifier: (_authData, query) => {
+                    query.selector.age = { $eq: 42 };
+                    return query;
+                },
+                serverOnlyFields: ['age']
+            });
+            await server.start();
+
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+            const docFromServer = ensureNotFalsy(await client.get(['owned'])).documents[0];
+            assert.strictEqual(typeof docFromServer.age, 'undefined');
+
+            docFromServer.firstName = 'changed';
+            await client.set([docFromServer]);
+
+            const docAfter = await col.findOne('owned').exec(true);
+            assert.strictEqual(docAfter.firstName, 'changed');
+            assert.strictEqual(docAfter.age, 42);
+            await col.database.close();
+        });
         it('should not allow clients to overwrite serverOnlyFields via /set', async () => {
             const col = await humansCollection.create(1);
             const doc = await col.findOne().exec(true);

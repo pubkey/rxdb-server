@@ -1057,6 +1057,64 @@ describe('endpoint-replication.test.ts', () => {
             await replicationState.cancel();
             await col.database.close();
         });
+        it('should allow pushing updates when the queryModifier uses a serverOnlyField', async () => {
+            const col = await humansCollection.create(0);
+            await col.bulkInsert([
+                { ...schemaObjects.humanData('owned'), age: 42 },
+                { ...schemaObjects.humanData('foreign'), age: 1 }
+            ]);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addReplicationEndpoint({
+                name: randomToken(10),
+                collection: col,
+                queryModifier: (_authData, query) => {
+                    query.selector.age = { $eq: 42 };
+                    return query;
+                },
+                serverOnlyFields: ['age']
+            });
+            await server.start();
+
+            const clientCol = await humansCollection.create(0);
+            const replicationState = replicateServer({
+                collection: clientCol,
+                replicationIdentifier: randomToken(10),
+                url: 'http://localhost:' + port + '/' + endpoint.urlPath,
+                headers,
+                live: true,
+                push: {},
+                pull: {},
+                eventSource: EventSource
+            });
+            ensureReplicationHasNoErrors(replicationState);
+            let forbidden = false;
+            replicationState.forbidden$.subscribe(() => forbidden = true);
+            await replicationState.awaitInSync();
+
+            const clientDocs = await clientCol.find().exec();
+            assert.deepStrictEqual(clientDocs.map(d => d.primary), ['owned']);
+            assert.strictEqual(typeof clientDocs[0].age, 'undefined');
+
+            await clientDocs[0].incrementalPatch({ firstName: 'changed' });
+            await waitUntil(async () => {
+                const serverDoc = await col.findOne('owned').exec(true);
+                return forbidden || serverDoc.firstName === 'changed';
+            });
+            assert.strictEqual(forbidden, false);
+            const serverDoc = await col.findOne('owned').exec(true);
+            assert.strictEqual(serverDoc.firstName, 'changed');
+            assert.strictEqual(serverDoc.age, 42);
+
+            await replicationState.cancel();
+            await clientCol.database.close();
+            await col.database.close();
+        });
         it('should not produce false conflicts when a serverOnlyField is absent from the stored document', async () => {
             /**
              * Reproduces a conflict-handling bug:
