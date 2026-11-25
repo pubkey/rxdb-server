@@ -1,0 +1,1 @@
+- FIX `RxServer.close()` did not end open connections, so a running `/pullStream` or `/query/observe` stream kept sending events after the server was closed [#467](https://github.com/pubkey/rxdb-server/pull/467)

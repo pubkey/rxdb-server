@@ -12,9 +12,11 @@ import {
     mergeServerDocumentFieldsMonad
 } from '../../plugins/server';
 import {
-    humansCollection
+    humansCollection,
+    schemaObjects
 } from 'rxdb/plugins/test-utils';
-import { nextPort } from './test-helpers.ts';
+import { wait } from 'async-test-util';
+import { nextPort, headers } from './test-helpers.ts';
 import { RxDBMigrationPlugin } from 'rxdb/plugins/migration-schema';
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
 import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
@@ -198,6 +200,66 @@ describe('server.test.ts', () => {
 
             server.close();
             col.database.close();
+        });
+        it('should end open streams on close()', async () => {
+            const port = await nextPort();
+            const col = await humansCollection.create(0);
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const replicationEndpoint = server.addReplicationEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            const restEndpoint = server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+
+            const baseUrl = `http://localhost:${port}/`;
+            const streams = await Promise.all([
+                baseUrl + replicationEndpoint.urlPath + '/pullStream',
+                baseUrl + restEndpoint.urlPath + '/query/observe?query=' + btoa(JSON.stringify({ selector: {} }))
+            ].map(async (url) => {
+                const response = await fetch(url, { headers });
+                const reader = (response.body as ReadableStream<Uint8Array>).getReader();
+                const decoder = new TextDecoder();
+                const stream = { reader, received: '', ended: Promise.resolve('') };
+                stream.ended = (async () => {
+                    try {
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) {
+                                return 'ended';
+                            }
+                            stream.received += decoder.decode(value);
+                        }
+                    } catch (_err) {
+                        return 'ended';
+                    }
+                })();
+                return stream;
+            }));
+
+            await server.close();
+            const docData = schemaObjects.humanData();
+            await col.insert(docData);
+
+            for (const stream of streams) {
+                const result = await Promise.race([
+                    stream.ended,
+                    wait(1000).then(() => 'still-open')
+                ]);
+                assert.strictEqual(result, 'ended');
+                assert.ok(!stream.received.includes(docData.passportId));
+                await stream.reader.cancel().catch(() => { });
+            }
+
+            await col.database.close();
         });
     });
     describe('.doesContainRegexQuerySelector()', () => {
