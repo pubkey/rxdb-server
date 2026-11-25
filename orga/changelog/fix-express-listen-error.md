@@ -1,1 +1,1 @@
-- FIX `RxServer.start()` resolved with the Express adapter when the server could not listen, for example because the port was already in use. It now rejects with the listen error.
+- FIX `RxServer.start()` resolved with the Express adapter when the server could not listen, for example because the port was already in use. It now rejects with the listen error. [#471](https://github.com/pubkey/rxdb-server/pull/471)
