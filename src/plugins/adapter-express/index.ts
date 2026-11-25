@@ -107,8 +107,12 @@ export const RxServerAdapterExpress: RxServerAdapter<Express, Request, Response>
     },
     async listen(serverApp, port, hostname) {
         const httpServer: HttpServer = await new Promise((res, rej) => {
-            const ret = ensureNotFalsy(serverApp).listen(port, hostname, () => {
-                res(ret);
+            const ret = ensureNotFalsy(serverApp).listen(port, hostname, (err?: Error) => {
+                if (err) {
+                    rej(err);
+                } else {
+                    res(ret);
+                }
             });
         });
         HTTP_SERVER_BY_EXPRESS.set(serverApp, httpServer);
