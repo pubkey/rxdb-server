@@ -1,6 +1,6 @@
 import { ById, MangoQuery } from 'rxdb/plugins/core';
 import { postRequest } from './utils.ts';
-import { Observable, Subject } from 'rxjs';
+import { Observable } from 'rxjs';
 import { EventSource } from 'eventsource';
 import { customFetchWithFixedHeaders } from '../../utils.ts';
 
@@ -32,31 +32,32 @@ export class RxRestClient<RxDocType> {
     }
 
     observeQuery(query: MangoQuery<RxDocType>): Observable<RxDocType[]> {
-        const result = new Subject<RxDocType[]>;
         // Standard base64 uses '+' and '/'; both are URL-reserved and a raw
         // '+' in the query string is decoded as a space by the server's
         // URL parser. Without encoding, the server's atob() then rejects
         // the corrupted string with "Invalid character" and the SSE
         // connection silently never delivers any document.
         const queryAsBase64 = encodeURIComponent(btoa(JSON.stringify(query)));
-        const eventSource: EventSource = new this.eventSource(
-            this.endpointUrl + '/query/observe?query=' + queryAsBase64,
-            {
-                withCredentials: true,
-                /**
-                 * Sending headers is not supported by the Browser EventSource API,
-                 * only by the npm module we use. In react-native you might have
-                 * to set another EventSource implementation.
-                 * @link https://www.npmjs.com/package/eventsource
-                 */
-                fetch: customFetchWithFixedHeaders(this.headers)
-            }
-        );
-        eventSource.onmessage = event => {
-            const eventData = JSON.parse(event.data);
-            result.next(eventData);
-        };
-        return result.asObservable();
+        return new Observable<RxDocType[]>(subscriber => {
+            const eventSource: EventSource = new this.eventSource(
+                this.endpointUrl + '/query/observe?query=' + queryAsBase64,
+                {
+                    withCredentials: true,
+                    /**
+                     * Sending headers is not supported by the Browser EventSource API,
+                     * only by the npm module we use. In react-native you might have
+                     * to set another EventSource implementation.
+                     * @link https://www.npmjs.com/package/eventsource
+                     */
+                    fetch: customFetchWithFixedHeaders(this.headers)
+                }
+            );
+            eventSource.onmessage = event => {
+                const eventData = JSON.parse(event.data);
+                subscriber.next(eventData);
+            };
+            return () => eventSource.close();
+        });
     }
 
     async get(ids: string[]): Promise<{ documents: RxDocType[] }> {
