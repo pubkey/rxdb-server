@@ -1,0 +1,1 @@
+- ADD REST endpoint route `/patch` and `RxRestClient.patch()` which update existing documents with the given fields and insert new ones, same as `/set` does today. Use them instead of `/set` when you rely on the patch behavior, because `/set` will replace documents in the next major release. [#476](https://github.com/pubkey/rxdb-server/pull/476)
