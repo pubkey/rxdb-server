@@ -1,0 +1,1 @@
+- FIX the replication `/push` route called the `changeValidator` with the `assumedMasterState` sent by the client instead of the document state stored on the server, so a client could bypass a `changeValidator` that blocks inserts [#479](https://github.com/pubkey/rxdb-server/pull/479)
