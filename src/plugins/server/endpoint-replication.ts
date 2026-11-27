@@ -226,7 +226,11 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
                 requestClosed = true;
             });
             const authData = await getAuthDataByRequest<AuthType, any, any>(this.server, req, res);
-            if (!authData || requestClosed) { return; }
+            if (!authData) { return; }
+            if (requestClosed) {
+                adapter.endResponse(res);
+                return;
+            }
 
             adapter.setSSEHeaders(res);
             const docDataMatcherStream = getDocAllowedMatcher(this, ensureNotFalsy(authData));

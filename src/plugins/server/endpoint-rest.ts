@@ -142,7 +142,11 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
                 requestClosed = true;
             });
             let authData = await getAuthDataByRequest(this.server, req, res);
-            if (!authData || requestClosed) { return; }
+            if (!authData) { return; }
+            if (requestClosed) {
+                adapter.endResponse(res);
+                return;
+            }
 
             // Run the queryModifier BEFORE setSSEHeaders so that a bad
             // request (e.g. a $regex query that the modifier wrapper
