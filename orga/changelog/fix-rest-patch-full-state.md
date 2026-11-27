@@ -1,0 +1,1 @@
+- FIX the REST `/patch` route rejected updates that did not send the fields used by the `queryModifier`, and the `changeValidator` only got the sent fields as `newDocumentState` instead of the full new document state
