@@ -290,6 +290,49 @@ describe('endpoint-replication.test.ts', () => {
             col.database.close();
             clientCol.database.close();
         });
+        it('should not keep the pullStream open when the client closes it while the authHandler runs', async function () {
+            this.timeout(10000);
+            const col = await humansCollection.create(0);
+            const port = await nextPort();
+            let responseWrites = 0;
+            const adapter = Object.assign({}, TEST_SERVER_ADAPTER, {
+                responseWrite(res: any, data: string) {
+                    responseWrites++;
+                    return TEST_SERVER_ADAPTER.responseWrite(res, data);
+                }
+            });
+            const server = await createRxServer({
+                adapter,
+                database: col.database,
+                port,
+                authHandler: async (requestHeaders) => {
+                    await wait(300);
+                    return authHandler(requestHeaders);
+                }
+            });
+            const endpoint = server.addReplicationEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+
+            const abortController = new AbortController();
+            fetch('http://localhost:' + port + '/' + endpoint.urlPath + '/pullStream', {
+                headers,
+                signal: abortController.signal
+            }).catch(() => { });
+            await wait(50);
+            abortController.abort();
+            // wait until the authHandler is done
+            await wait(1000);
+
+            const writesBefore = responseWrites;
+            await col.insert(schemaObjects.humanData(undefined, 1, headers.userid));
+            await wait(1000);
+            assert.strictEqual(responseWrites, writesBefore);
+
+            await col.database.close();
+        });
         it('should keep only one open EventSource after pause() and start()', async () => {
             const col = await humansCollection.create(1);
             const port = await nextPort();

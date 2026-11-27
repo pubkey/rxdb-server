@@ -1,0 +1,1 @@
+- FIX `/pullStream` of the replication endpoint and `/query/observe` of the REST endpoint kept their subscription and wrote to the closed connection when the client closed the request while the `authHandler` was running
