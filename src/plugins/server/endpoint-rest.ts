@@ -1,11 +1,13 @@
 import {
     FilledMangoQuery,
+    MangoQuery,
     RxCollection,
     RxError,
     normalizeMangoQuery
 } from 'rxdb/plugins/core';
 import type { RxServer } from './rx-server.ts';
 import type {
+    RxServerAuthData,
     RxServerChangeValidator,
     RxServerEndpoint,
     RxServerQueryModifier,
@@ -73,6 +75,18 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
             }
             return queryModifier(authData, query);
         }
+        const prepareClientQuery = (authData: RxServerAuthData<AuthType>, clientQuery: any): FilledMangoQuery<RxDocType> => {
+            if (doesQueryUseFields(clientQuery, serverOnlyFields)) {
+                throw new Error('queries must not use serverOnlyFields');
+            }
+            const sortedQuery = serverOnlyFields.length > 0 && !clientQuery.sort ?
+                { ...clientQuery, sort: [{ [primaryPath]: 'asc' }] } :
+                clientQuery;
+            return this.queryModifier(
+                authData,
+                normalizeMangoQuery(this.collection.schema.jsonSchema, sortedQuery)
+            );
+        };
         this.changeValidator = (authData, change) => {
             if (
                 (
@@ -96,12 +110,9 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
 
             let useQuery: FilledMangoQuery<RxDocType>
             try {
-                useQuery = this.queryModifier(
+                useQuery = prepareClientQuery(
                     ensureNotFalsy(authData),
-                    normalizeMangoQuery(
-                        this.collection.schema.jsonSchema,
-                        adapter.getRequestBody(req)
-                    )
+                    adapter.getRequestBody(req)
                 );
             } catch (err) {
                 adapter.closeConnection(res, 400, 'Bad Request');
@@ -130,12 +141,9 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
             // with a proper 400 response, mirroring the /query endpoint.
             let useQuery: FilledMangoQuery<RxDocType>;
             try {
-                useQuery = this.queryModifier(
+                useQuery = prepareClientQuery(
                     ensureNotFalsy(authData),
-                    normalizeMangoQuery(
-                        this.collection.schema.jsonSchema,
-                        JSON.parse(decodeQueryParam(adapter.getRequestQuery(req)))
-                    )
+                    JSON.parse(decodeQueryParam(adapter.getRequestQuery(req)))
                 );
             } catch (err) {
                 adapter.closeConnection(res, 400, 'Bad Request');
@@ -350,6 +358,35 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
     }
 }
 
+
+function isFieldPath(path: string, fields: string[]): boolean {
+    return fields.some(field => path === field || path.startsWith(field + '.'));
+}
+
+function doesSelectorUseFields(selector: any, fields: string[]): boolean {
+    if (Array.isArray(selector)) {
+        return selector.some(item => doesSelectorUseFields(item, fields));
+    }
+    if (!selector || typeof selector !== 'object') {
+        return false;
+    }
+    return Object.entries(selector).some(([key, value]) => {
+        if (key.startsWith('$')) {
+            return doesSelectorUseFields(value, fields);
+        }
+        return isFieldPath(key, fields);
+    });
+}
+
+function doesQueryUseFields(query: MangoQuery<any>, fields: string[]): boolean {
+    if (fields.length === 0) {
+        return false;
+    }
+    const index = query.index ? ([] as string[]).concat(query.index) : [];
+    return doesSelectorUseFields(query.selector, fields) ||
+        (query.sort || []).some(sortPart => Object.keys(sortPart).some(key => isFieldPath(key, fields))) ||
+        index.some(key => isFieldPath(key, fields));
+}
 
 /**
  * "block" the previous version urls and send a 426 on them so that
