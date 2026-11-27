@@ -267,20 +267,29 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
                         }
                         writes.push(() => this.collection.insert(mergedDocData).catch(err => onWriteError(err, mergedDocData)));
                     } else {
+                        /**
+                         * The request body can contain only some fields of the document.
+                         * The checks must run on the document state that is stored
+                         * after the write, not only on the sent fields.
+                         */
+                        const storedDocData = doc.toJSON(true) as any;
+                        const mergedDocData = mergeServerDocumentFields(
+                            { ...doc.toJSON(false), ...docData } as RxDocType,
+                            storedDocData
+                        );
                         const isAllowed = this.changeValidator(authData, {
-                            newDocumentState: removeServerOnlyFields(docData as any),
-                            assumedMasterState: removeServerOnlyFields(doc.toJSON(true))
+                            newDocumentState: removeServerOnlyFields(mergedDocData as any),
+                            assumedMasterState: removeServerOnlyFields(storedDocData)
                         });
                         if (!isAllowed) {
                             adapter.closeConnection(res, 403, 'Forbidden');
                             return;
                         }
-                        const mergedDocData = mergeServerDocumentFields(docData, doc.toJSON(true) as any);
                         if (!docDataMatcherWrite(mergedDocData as any)) {
                             adapter.closeConnection(res, 403, 'Forbidden');
                             return;
                         }
-                        writes.push(() => doc.patch(mergedDocData).catch(err => onWriteError(err, mergedDocData)));
+                        writes.push(() => doc.patch(mergedDocData).catch(err => onWriteError(err, docData)));
                     }
                 }
                 await Promise.all(writes.map(write => write()));

@@ -1120,6 +1120,105 @@ describe('endpoint-rest.test.ts', () => {
 
             await col.database.close();
         });
+        it('should allow patching an own document without sending the fields of the queryModifier', async () => {
+            const col = await humansCollection.create(0);
+            const docBefore = await col.insert(schemaObjects.humanData('own-patch-doc', 30, headers.userid));
+            const client = await startPatchServer(col, true);
+
+            await client.patch([{ passportId: 'own-patch-doc', age: 31 } as any]);
+
+            const docAfter = await col.findOne('own-patch-doc').exec(true);
+            assert.strictEqual(docAfter.age, 31);
+            assert.strictEqual(docAfter.firstName, docBefore.firstName);
+            assert.strictEqual(docAfter.lastName, docBefore.lastName);
+
+            await col.database.close();
+        });
+        it('should not allow moving an own document out of the queryModifier with a patch', async () => {
+            const col = await humansCollection.create(0);
+            await col.insert(schemaObjects.humanData('own-move-doc', 30, headers.userid));
+            const client = await startPatchServer(col, true);
+
+            const response = await fetch(client.endpointUrl + '/patch', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...headers
+                },
+                body: JSON.stringify([{
+                    passportId: 'own-move-doc',
+                    firstName: 'bob'
+                }])
+            });
+            assert.strictEqual(response.status, 403);
+
+            const docAfter = await col.findOne('own-move-doc').exec(true);
+            assert.strictEqual(docAfter.firstName, headers.userid);
+
+            await col.database.close();
+        });
+        it('should not overwrite a concurrent write to fields that the patch does not contain', async () => {
+            const col = await humansCollection.create(0);
+            const doc = await col.insert(schemaObjects.humanData('race-patch-doc', 30, headers.userid));
+            const client = await startPatchServer(col);
+
+            /**
+             * Write to the document after the server has read it
+             * so that the patch of the server runs into a conflict and is retried.
+             */
+            const storageInstance: any = col.storageInstance;
+            const findDocumentsByIdBefore = storageInstance.findDocumentsById.bind(storageInstance);
+            let calls = 0;
+            storageInstance.findDocumentsById = async (ids: string[], withDeleted: boolean) => {
+                calls++;
+                if (calls === 1) {
+                    await doc.incrementalPatch({ lastName: 'concurrent-write' });
+                }
+                return findDocumentsByIdBefore(ids, withDeleted);
+            };
+
+            await client.patch([{ passportId: 'race-patch-doc', age: 31 } as any]);
+
+            const docAfter = await col.findOne('race-patch-doc').exec(true);
+            assert.strictEqual(docAfter.age, 31);
+            assert.strictEqual(docAfter.lastName, 'concurrent-write');
+
+            await col.database.close();
+        });
+        it('should call the changeValidator with the full new document state', async () => {
+            const col = await humansCollection.create(0);
+            const docBefore = await col.insert(schemaObjects.humanData('validated-patch-doc', 30, headers.userid));
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const changes: any[] = [];
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col,
+                changeValidator: (_authData, change) => {
+                    changes.push(change);
+                    // only allow changes that keep the lastName
+                    return !!change.assumedMasterState && change.newDocumentState.lastName === change.assumedMasterState.lastName;
+                }
+            });
+            await server.start();
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+
+            await client.patch([{ passportId: 'validated-patch-doc', age: 31 } as any]);
+
+            assert.strictEqual(changes.length, 1);
+            assert.strictEqual(changes[0].newDocumentState.age, 31);
+            assert.strictEqual(changes[0].newDocumentState.firstName, docBefore.firstName);
+            assert.strictEqual(changes[0].newDocumentState.lastName, docBefore.lastName);
+            const docAfter = await col.findOne('validated-patch-doc').exec(true);
+            assert.strictEqual(docAfter.age, 31);
+
+            await col.database.close();
+        });
         it('should give a 426 error on outdated versions', async () => {
             const newestSchema = clone(schemas.human);
             newestSchema.version = 1;
