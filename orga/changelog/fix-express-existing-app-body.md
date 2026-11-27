@@ -1,0 +1,1 @@
+- FIX the express adapter did not parse JSON request bodies when an existing express app was passed as `serverApp`, so the REST routes and the replication `/push` failed [#480](https://github.com/pubkey/rxdb-server/pull/480)

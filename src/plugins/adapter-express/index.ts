@@ -100,7 +100,12 @@ export const RxServerAdapterExpress: RxServerAdapter<Express, Request, Response>
         serverApp.get(path, handler);
     },
     post(serverApp, path, handler) {
-        serverApp.post(path, handler);
+        /**
+         * The serverApp can be an existing express app
+         * that does not parse JSON bodies, so the routes have to do it.
+         * express.json() does nothing when the body was already parsed.
+         */
+        serverApp.post(path, express.json(), handler);
     },
     all(serverApp, path, handler) {
         serverApp.all(path, handler);
