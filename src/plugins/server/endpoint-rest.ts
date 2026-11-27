@@ -289,7 +289,7 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
                             adapter.closeConnection(res, 403, 'Forbidden');
                             return;
                         }
-                        writes.push(() => doc.patch(mergedDocData).catch(err => onWriteError(err, mergedDocData)));
+                        writes.push(() => doc.patch(mergedDocData).catch(err => onWriteError(err, docData)));
                     }
                 }
                 await Promise.all(writes.map(write => write()));

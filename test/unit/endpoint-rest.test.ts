@@ -1128,6 +1128,34 @@ describe('endpoint-rest.test.ts', () => {
 
             await col.database.close();
         });
+        it('should not overwrite a concurrent write to fields that the patch does not contain', async () => {
+            const col = await humansCollection.create(0);
+            const doc = await col.insert(schemaObjects.humanData('race-patch-doc', 30, headers.userid));
+            const client = await startPatchServer(col);
+
+            /**
+             * Write to the document after the server has read it
+             * so that the patch of the server runs into a conflict and is retried.
+             */
+            const storageInstance: any = col.storageInstance;
+            const findDocumentsByIdBefore = storageInstance.findDocumentsById.bind(storageInstance);
+            let calls = 0;
+            storageInstance.findDocumentsById = async (ids: string[], withDeleted: boolean) => {
+                calls++;
+                if (calls === 1) {
+                    await doc.incrementalPatch({ lastName: 'concurrent-write' });
+                }
+                return findDocumentsByIdBefore(ids, withDeleted);
+            };
+
+            await client.patch([{ passportId: 'race-patch-doc', age: 31 } as any]);
+
+            const docAfter = await col.findOne('race-patch-doc').exec(true);
+            assert.strictEqual(docAfter.age, 31);
+            assert.strictEqual(docAfter.lastName, 'concurrent-write');
+
+            await col.database.close();
+        });
         it('should call the changeValidator with the full new document state', async () => {
             const col = await humansCollection.create(0);
             const docBefore = await col.insert(schemaObjects.humanData('validated-patch-doc', 30, headers.userid));
