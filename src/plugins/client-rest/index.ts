@@ -1,7 +1,7 @@
 import { ById, MangoQuery } from 'rxdb/plugins/core';
 import { postRequest } from './utils.ts';
 import { Observable } from 'rxjs';
-import { EventSource } from 'eventsource';
+import { EventSource, ErrorEvent } from 'eventsource';
 import { customFetchWithFixedHeaders } from '../../utils.ts';
 
 export class RxRestClient<RxDocType> {
@@ -58,6 +58,11 @@ export class RxRestClient<RxDocType> {
             eventSource.onmessage = event => {
                 const eventData = JSON.parse(event.data);
                 subscriber.next(eventData);
+            };
+            eventSource.onerror = (err: ErrorEvent) => {
+                if (eventSource.readyState === EventSource.CLOSED) {
+                    subscriber.error(new Error('Server returned an error ' + JSON.stringify({ code: err.code, message: err.message })));
+                }
             };
             return () => eventSource.close();
         });
