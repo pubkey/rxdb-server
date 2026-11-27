@@ -1045,7 +1045,7 @@ describe('endpoint-rest.test.ts', () => {
             const docBefore = await col.insert(schemaObjects.humanData('patch-doc', 30, headers.userid));
             const client = await startPatchServer(col);
 
-            await client.patch([{ passportId: 'patch-doc', age: 31 } as any]);
+            await client.patch([{ passportId: 'patch-doc', age: 31 }]);
 
             const docAfter = await col.findOne('patch-doc').exec(true);
             assert.strictEqual(docAfter.age, 31);
