@@ -1061,6 +1061,45 @@ describe('endpoint-replication.test.ts', () => {
             serverCol.database.close();
             clientCol.database.close();
         });
+        it('should not accept an insert with an assumedMasterState when the changeValidator only allows updates', async () => {
+            const serverCol = await humansCollection.create(0);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: serverCol.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addReplicationEndpoint({
+                name: randomToken(10),
+                collection: serverCol,
+                // only allow updates, no inserts
+                changeValidator: (_authData, change) => !!change.assumedMasterState
+            });
+            await server.start();
+
+            const newDoc = Object.assign(
+                schemaObjects.humanData('forged-insert', 1, headers.userid),
+                { _deleted: false }
+            );
+            const response = await fetch('http://localhost:' + port + '/' + endpoint.urlPath + '/push', {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    ...headers
+                },
+                body: JSON.stringify([{
+                    newDocumentState: newDoc,
+                    assumedMasterState: newDoc
+                }])
+            });
+            assert.strictEqual(response.status, 403);
+            const serverDocs = await serverCol.find().exec();
+            assert.strictEqual(serverDocs.length, 0);
+
+            await serverCol.database.close();
+        });
     });
     describe('special characters in primary keys', () => {
         it('should replicate documents whose primary key contains url-unsafe characters', async function () {

@@ -180,9 +180,16 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
                 return;
             }
 
+            /**
+             * The replication handler inserts a document that does not exist
+             * on the server, even when the client sent an assumedMasterState.
+             * So for these writes the changeValidator must see an insert.
+             */
             const hasInvalidChange = rows.some(row => !this.changeValidator(ensureNotFalsy(authData), {
                 newDocumentState: removeServerOnlyFields(row.newDocumentState),
-                assumedMasterState: removeServerOnlyFields(row.assumedMasterState)
+                assumedMasterState: currentStateDocs.has((row.newDocumentState as any)[primaryPath])
+                    ? removeServerOnlyFields(row.assumedMasterState)
+                    : undefined
             }));
             if (hasInvalidChange) {
                 adapter.closeConnection(res, 403, 'Forbidden');
