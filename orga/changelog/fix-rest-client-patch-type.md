@@ -1,0 +1,1 @@
+- FIX `RxRestClient.patch()` was typed with full documents, so a patch with only some fields did not type-check

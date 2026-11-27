@@ -19,7 +19,8 @@ import {
     schemas,
     humansCollection,
     HumanDocumentType,
-    humanDefault
+    humanDefault,
+    randomStringWithSpecialChars
 } from 'rxdb/plugins/test-utils';
 import { nextPort, customFetchWithFixedHeaders } from './test-helpers.ts';
 import { assertThrows, wait, waitUntil } from 'async-test-util';
@@ -1045,7 +1046,7 @@ describe('endpoint-rest.test.ts', () => {
             const docBefore = await col.insert(schemaObjects.humanData('patch-doc', 30, headers.userid));
             const client = await startPatchServer(col);
 
-            await client.patch([{ passportId: 'patch-doc', age: 31 } as any]);
+            await client.patch([{ passportId: 'patch-doc', age: 31 }]);
 
             const docAfter = await col.findOne('patch-doc').exec(true);
             assert.strictEqual(docAfter.age, 31);
@@ -1272,6 +1273,95 @@ describe('endpoint-rest.test.ts', () => {
             const docsAfter = await col.find().exec();
             assert.deepStrictEqual(docsAfter.map(d => d.passportId).sort(), ['foreign-doc', 'own-doc']);
 
+            await col.database.close();
+        });
+    });
+    describe('special characters', () => {
+        /**
+         * Contains characters that are relevant for URL parsing and
+         * base64 encoding, characters outside of Latin-1 and the random
+         * emojis and special chars of the RxDB test data.
+         */
+        function specialString() {
+            return '%&#+?=/ \\😊🏳️‍🌈äß' + randomStringWithSpecialChars(8, 12);
+        }
+        async function startServer(col: Awaited<ReturnType<typeof humansCollection.create>>) {
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+            return createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+        }
+        it('should set, get, query, patch and delete documents with special characters', async () => {
+            const col = await humansCollection.create(0);
+            const client = await startServer(col);
+
+            const docs = new Array(5).fill(0).map(() => schemaObjects.humanData(
+                specialString(),
+                20,
+                specialString()
+            ));
+            const ids = docs.map(d => d.passportId);
+            await client.set(docs);
+
+            const storedDocs = await col.find().exec();
+            assert.deepStrictEqual(
+                storedDocs.map(d => d.passportId).sort(),
+                ids.slice(0).sort()
+            );
+
+            const getResult = await client.get(ids);
+            assert.deepStrictEqual(
+                getResult.documents.map((d: HumanDocumentType) => d.passportId).sort(),
+                ids.slice(0).sort()
+            );
+
+            for (const doc of docs) {
+                const byId = await client.query({ selector: { passportId: doc.passportId } });
+                assert.deepStrictEqual(byId.documents.map((d: HumanDocumentType) => d.passportId), [doc.passportId]);
+                const byName = await client.query({ selector: { firstName: { $eq: doc.firstName } } });
+                assert.deepStrictEqual(byName.documents.map((d: HumanDocumentType) => d.passportId), [doc.passportId]);
+            }
+
+            const newLastName = specialString();
+            await client.patch([{ passportId: ids[0], lastName: newLastName }]);
+            const patched = await col.findOne(ids[0]).exec(true);
+            assert.strictEqual(patched.lastName, newLastName);
+            assert.strictEqual(patched.firstName, docs[0].firstName);
+
+            await client.delete(ids);
+            const docsAfter = await col.find().exec();
+            assert.strictEqual(docsAfter.length, 0);
+
+            await col.database.close();
+        });
+        it('should observe a query that filters by a value with special characters', async () => {
+            const col = await humansCollection.create(2);
+            const client = await startServer(col);
+
+            const firstName = specialString();
+            const emitted: HumanDocumentType[][] = [];
+            const sub = client.observeQuery({ selector: { firstName: { $eq: firstName } } }).subscribe(result => emitted.push(result));
+            await waitUntil(() => emitted.length === 1);
+            assert.strictEqual(ensureNotFalsy(emitted[0]).length, 0);
+
+            const passportId = specialString();
+            await col.insert(schemaObjects.humanData(passportId, 20, firstName));
+            await waitUntil(() => emitted.length === 2);
+            assert.deepStrictEqual(
+                ensureNotFalsy(lastOfArray(emitted)).map(d => d.passportId),
+                [passportId]
+            );
+
+            sub.unsubscribe();
             await col.database.close();
         });
     });

@@ -1,0 +1,1 @@
+- ADD tests for the REST and replication endpoints with document ids and values that contain emojis and special characters

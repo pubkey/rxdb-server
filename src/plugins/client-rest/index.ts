@@ -83,7 +83,7 @@ export class RxRestClient<RxDocType> {
         return response;
     }
 
-    async patch(docs: RxDocType[]) {
+    async patch(docs: Partial<RxDocType>[]) {
         const response = await postRequest(
             this.endpointUrl + '/patch',
             docs,

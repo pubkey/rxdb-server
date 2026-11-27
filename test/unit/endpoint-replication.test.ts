@@ -23,7 +23,8 @@ import {
     ensureReplicationHasNoErrors,
     isFastMode,
     HumanDocumentType,
-    humanDefault
+    humanDefault,
+    randomStringWithSpecialChars
 } from 'rxdb/plugins/test-utils';
 import { nextPort, customFetchWithFixedHeaders } from './test-helpers.ts';
 import { wait, waitUntil } from 'async-test-util';
@@ -1071,6 +1072,70 @@ describe('endpoint-replication.test.ts', () => {
             const clientDocs = await clientCol.find().exec();
             const clientIds = clientDocs.map(d => d.passportId).sort();
             assert.deepStrictEqual(clientIds, ['first-doc', 'second&doc']);
+
+            await replicationState.cancel();
+            await col.database.close();
+            await clientCol.database.close();
+        });
+        it('should replicate documents with emojis and special characters in both directions', async function () {
+            this.timeout(10000);
+            function specialString() {
+                return '%&#+?=/ \\😊🏳️‍🌈äß' + randomStringWithSpecialChars(8, 12);
+            }
+
+            const col = await humansCollection.create(0);
+            const serverDocs = new Array(3).fill(0).map(() => schemaObjects.humanData(specialString(), 20, specialString()));
+            await col.bulkInsert(serverDocs);
+
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = await server.addReplicationEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+
+            const clientCol = await humansCollection.create(0);
+            const url = 'http://localhost:' + port + '/' + endpoint.urlPath;
+            const replicationState = await replicateServer<HumanDocumentType>({
+                collection: clientCol,
+                replicationIdentifier: randomToken(10),
+                url,
+                headers,
+                live: true,
+                push: {},
+                pull: { batchSize: 1 },
+                eventSource: EventSource
+            });
+            ensureReplicationHasNoErrors(replicationState);
+            await replicationState.awaitInSync();
+
+            const clientDocs = await clientCol.find().exec();
+            assert.deepStrictEqual(
+                clientDocs.map(d => d.toJSON()).sort((a, b) => a.passportId < b.passportId ? -1 : 1),
+                serverDocs.slice(0).sort((a, b) => a.passportId < b.passportId ? -1 : 1)
+            );
+
+            // client to server
+            const clientDoc = schemaObjects.humanData(specialString(), 21, specialString());
+            await clientCol.insert(clientDoc);
+            await waitUntil(async () => {
+                const doc = await col.findOne(clientDoc.passportId).exec();
+                return !!doc && doc.firstName === clientDoc.firstName;
+            });
+
+            // server to client over the pullStream
+            const streamDoc = schemaObjects.humanData(specialString(), 22, specialString());
+            await col.insert(streamDoc);
+            await waitUntil(async () => {
+                const doc = await clientCol.findOne(streamDoc.passportId).exec();
+                return !!doc && doc.firstName === streamDoc.firstName;
+            });
 
             await replicationState.cancel();
             await col.database.close();
