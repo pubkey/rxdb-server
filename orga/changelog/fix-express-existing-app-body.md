@@ -1,0 +1,1 @@
+- FIX the express adapter did not parse JSON request bodies when an existing express app was passed as `serverApp`, so the REST routes and the replication `/push` failed

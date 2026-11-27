@@ -24,6 +24,9 @@ import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
 import config from './config.ts';
 import { authHandler } from './test-helpers.ts';
 import { TEST_SERVER_ADAPTER } from './config-server.test.ts';
+import express from 'express';
+import { RxServerAdapterExpress } from '../../plugins/adapter-express';
+import { createRestClient } from '../../plugins/client-rest';
 
 /**
  * exit with non-zero on unhandledRejection
@@ -316,6 +319,34 @@ describe('server.test.ts', () => {
             await server2.close();
             await col2.database.close();
             await col1.database.close();
+        });
+    });
+    describe('express adapter', () => {
+        it('should work on an existing express app that does not parse JSON bodies', async function () {
+            if (TEST_SERVER_ADAPTER !== RxServerAdapterExpress) {
+                return this.skip();
+            }
+            const port = await nextPort();
+            const col = await humansCollection.create(0);
+            const server = await createRxServer({
+                adapter: RxServerAdapterExpress,
+                serverApp: express(),
+                database: col.database,
+                authHandler,
+                port
+            });
+            const endpoint = server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+
+            const client = createRestClient<any>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+            await client.set([schemaObjects.humanData('existing-app-doc', 1, headers.userid)]);
+            const result = await client.query({ selector: {} });
+            assert.deepStrictEqual(result.documents.map((d: any) => d.passportId), ['existing-app-doc']);
+
+            await col.database.close();
         });
     });
     describe('.doesContainRegexQuerySelector()', () => {
