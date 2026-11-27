@@ -70,6 +70,34 @@ describe('endpoint-rest.test.ts', () => {
         });
     });
     describe('/query', () => {
+        it('should not allow a query when validUntil of the auth data has expired', async () => {
+            const col = await humansCollection.create(1);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler: (requestHeaders) => {
+                    const authData = authHandler(requestHeaders) as any;
+                    return {
+                        data: authData.data,
+                        validUntil: Date.now() - 1000
+                    };
+                },
+                port
+            });
+            const endpoint = await server.addRestEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+            const client = createRestClient<HumanDocumentType>('http://localhost:' + port + '/' + endpoint.urlPath, headers);
+            await assertThrows(
+                () => client.query({ selector: {} }),
+                Error,
+                'Unauthorized'
+            );
+            await col.database.close();
+        });
         it('should return the correct query results', async () => {
             const col = await humansCollection.create(5);
             const port = await nextPort();

@@ -561,6 +561,38 @@ describe('endpoint-replication.test.ts', () => {
         });
     });
     describe('authentification', () => {
+        it('should drop clients whose auth data has an expired validUntil', async () => {
+            const col = await humansCollection.create(1);
+            const port = await nextPort();
+            const server = await createRxServer({
+                adapter: TEST_SERVER_ADAPTER,
+                database: col.database,
+                authHandler: (requestHeaders) => {
+                    const authData = authHandler(requestHeaders) as any;
+                    return {
+                        data: authData.data,
+                        validUntil: Date.now() - 1000
+                    };
+                },
+                port
+            });
+            const endpoint = await server.addReplicationEndpoint({
+                name: randomToken(10),
+                collection: col
+            });
+            await server.start();
+            const url = 'http://localhost:' + port + '/' + endpoint.urlPath;
+            for (const path of urlSubPaths) {
+                const response = await fetch(url + '/' + path, {
+                    method: path === 'push' ? 'POST' : 'GET',
+                    headers: Object.assign({ 'Content-Type': 'application/json' }, headers),
+                    body: path === 'push' ? JSON.stringify([]) : undefined
+                });
+                assert.strictEqual(response.status, 401, path);
+                await response.text();
+            }
+            await col.database.close();
+        });
         it('should drop non authenticated clients', async () => {
             const col = await humansCollection.create(1);
             const port = await nextPort();
