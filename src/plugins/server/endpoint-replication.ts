@@ -216,9 +216,21 @@ export class RxServerReplicationEndpoint<ServerAppType, AuthType, RxDocType> imp
             adapter.endResponseJson(res, conflicts.map(c => removeServerOnlyFields(c)));
         });
         this.server.adapter.get(this.server.serverApp, '/' + this.urlPath + '/pullStream', async (req, res) => {
-
+            /**
+             * The client can close the request while the authHandler runs.
+             * The close event is then already emitted when the stream would be set up,
+             * so the stream must not be started.
+             */
+            let requestClosed = false;
+            adapter.onRequestClose(req, () => {
+                requestClosed = true;
+            });
             const authData = await getAuthDataByRequest<AuthType, any, any>(this.server, req, res);
             if (!authData) { return; }
+            if (requestClosed) {
+                adapter.endResponse(res);
+                return;
+            }
 
             adapter.setSSEHeaders(res);
             const docDataMatcherStream = getDocAllowedMatcher(this, ensureNotFalsy(authData));

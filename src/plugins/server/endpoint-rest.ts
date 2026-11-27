@@ -132,8 +132,21 @@ export class RxServerRestEndpoint<ServerAppType, AuthType, RxDocType> implements
          * like ?query=e3NlbGVjdG9yOiB7fX0=
          */
         this.server.adapter.get(this.server.serverApp, '/' + this.urlPath + '/query/observe', async (req, res) => {
+            /**
+             * The client can close the request while the authHandler runs.
+             * The close event is then already emitted when the stream would be set up,
+             * so the stream must not be started.
+             */
+            let requestClosed = false;
+            adapter.onRequestClose(req, () => {
+                requestClosed = true;
+            });
             let authData = await getAuthDataByRequest(this.server, req, res);
             if (!authData) { return; }
+            if (requestClosed) {
+                adapter.endResponse(res);
+                return;
+            }
 
             // Run the queryModifier BEFORE setSSEHeaders so that a bad
             // request (e.g. a $regex query that the modifier wrapper
